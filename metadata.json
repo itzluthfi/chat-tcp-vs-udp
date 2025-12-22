@@ -1,0 +1,5 @@
+{
+  "name": "Nexus Realtime Chat & Monitor",
+  "description": "A sophisticated realtime communication platform integrated with high-performance network monitoring dashboards, featuring WebSocket simulation, JWT-based auth simulation, and live throughput analytics.",
+  "requestFramePermissions": []
+}
