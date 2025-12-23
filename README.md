@@ -56,3 +56,10 @@ Aplikasi ini menggunakan pola **Write-Through**:
 
 ---
 *Nexus Engine v2.7 - Database Ready Architecture*
+
+
+Jawaban Singkat untuk Dosen/Laporan UTS:
+
+Jika ditanya "Apa yang membuat JWT di sistem ini unik antar sesi login?", jawabannya adalah:
+
+    "JWT digenerate dari kombinasi ID User, Role, dan Timestamp (Issued At). Karena waktu pembuatan (iat) selalu bergerak maju setiap detik, maka setiap kali user melakukan login ulang, string token yang dihasilkan akan selalu berbeda meskipun user-nya sama."

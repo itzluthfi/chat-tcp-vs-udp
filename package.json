@@ -1,4 +1,3 @@
-
 {
   "name": "nexus-realtime-hub",
   "version": "2.7.0",
@@ -7,20 +6,27 @@
   "scripts": {
     "start": "node server.js",
     "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "server": "node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.6.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.10.3",
     "socket.io": "^4.7.2",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "recharts": "^3.6.0",
-    "ws": "^8.18.3"
+    "socket.io-client": "^4.7.2"
   },
   "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.2.2",
     "vite": "^5.0.0"
   }
 }
