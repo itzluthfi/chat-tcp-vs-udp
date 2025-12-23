@@ -39,7 +39,8 @@ export interface MetricPoint {
 export interface LogEntry {
   id: string;
   timestamp: string;
-  method: 'GET' | 'POST' | 'WS' | 'AUTH';
+  // Fix: Added 'PUT' and 'DELETE' to the allowed method types to support common HTTP verbs
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'WS' | 'AUTH';
   path: string;
   status: number | string;
   message: string;

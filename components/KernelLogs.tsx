@@ -32,8 +32,11 @@ const KernelLogs: React.FC<KernelLogsProps> = ({ logs }) => {
             <div key={log.id} className="flex gap-4 hover:bg-slate-800/50 py-1 transition-colors group">
               <span className="text-slate-600 shrink-0">[{log.timestamp}]</span>
               <span className={`shrink-0 font-bold w-12 ${
+                // Added color mapping for PUT and DELETE to ensure visual consistency
                 log.method === 'GET' ? 'text-emerald-400' :
                 log.method === 'POST' ? 'text-indigo-400' :
+                log.method === 'PUT' ? 'text-sky-400' :
+                log.method === 'DELETE' ? 'text-rose-500' :
                 log.method === 'WS' ? 'text-amber-400' : 'text-rose-400'
               }`}>
                 {log.method}
