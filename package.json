@@ -1,29 +1,26 @@
+
 {
-  "name": "nexus-realtime-chat-&-monitor",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "name": "nexus-realtime-hub",
+  "version": "2.7.0",
+  "description": "Nexus Chat & Monitor with MySQL Backend",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "server": "ts-node server.ts"
+    "server": "node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1",
-    "mysql2": "^3.16.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "mysql2": "^3.6.1",
+    "socket.io": "^4.7.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "recharts": "^3.6.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "ts-node": "^10.9.2",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "vite": "^5.0.0"
   }
 }
