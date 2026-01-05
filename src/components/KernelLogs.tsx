@@ -43,7 +43,6 @@ const KernelLogs: React.FC<KernelLogsProps> = ({ logs }) => {
               <span className="text-slate-600 shrink-0">[{log.timestamp}]</span>
               <span
                 className={`shrink-0 font-bold w-12 ${
-                  // Added color mapping for PUT and DELETE to ensure visual consistency
                   log.method === "GET"
                     ? "text-emerald-400"
                     : log.method === "POST"

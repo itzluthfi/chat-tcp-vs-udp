@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { io } from "socket.io-client"; // Socket Client
+import { io } from "socket.io-client";
 import {
   User,
   Message,
@@ -28,7 +28,6 @@ const App: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isOnline, setIsOnline] = useState(true);
 
-  // --- NEW STATE: Active Tab (Lifted from ChatWindow) & Unread Counts ---
   const [activeTab, setActiveTabState] = useState<"global" | string>(() => {
     return localStorage.getItem("nexus_active_tab") || "global";
   });
@@ -37,13 +36,11 @@ const App: React.FC = () => {
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
     localStorage.setItem("nexus_active_tab", tab);
-    // Clear unread count when switching to that user
     if (tab !== "global") {
         setUnreadCounts(prev => ({ ...prev, [tab]: 0 }));
     }
   };
 
-  // Helper Log
   const addLog = (
     method: LogEntry["method"],
     path: string,
@@ -61,10 +58,7 @@ const App: React.FC = () => {
     setLogs((prev) => [newLog, ...prev].slice(0, 50));
   };
 
-
-   // --- 1. LOGIKA UTAMA: SOCKET.IO ---
   useEffect(() => {
-    // Attempt Auto-Login
     const attemptAutoLogin = async () => {
       const token = localStorage.getItem("nexus_token");
       const rememberToken = localStorage.getItem("nexus_remember_token");
@@ -96,7 +90,6 @@ const App: React.FC = () => {
                   setCurrentUser({ ...data.user, status: "online" });
                   setIsOnline(true);
               } else {
-                  // Remember token invalid
                   localStorage.removeItem("nexus_remember_token");
                   localStorage.removeItem("nexus_token");
               }
@@ -106,31 +99,25 @@ const App: React.FC = () => {
 
     attemptAutoLogin();
 
-    // Connect
     const socket = io(SOCKET_URL);
 
-    // Event: Connect
     socket.on("connect", () => {
       addLog("WS", "/socket.io", "CONNECTED", `Socket ID: ${socket.id}`);
       setIsOnline(true);
     });
 
-    // Event: Disconnect
     socket.on("disconnect", () => {
       addLog("WS", "/socket.io", "DISCONNECT", "Lost connection to server");
       setIsOnline(false);
     });
 
-    // Event: Terima Pesan Chat
     socket.on("receive_message", (newMessage: Message) => {
       setMessages((prev) => {
         if (prev.some((m) => m.id === newMessage.id)) return prev;
         return [...prev, newMessage];
       });
 
-      // Handle Unread Badges
       if (currentUser && newMessage.senderId !== currentUser.id) {
-         // If direct message AND not currently looking at this chat
          if (newMessage.receiverId === currentUser.id && activeTab !== newMessage.senderId) {
              setUnreadCounts(prev => ({
                  ...prev,
@@ -142,10 +129,8 @@ const App: React.FC = () => {
       addLog("WS", "receive_message", 200, `Msg from ${newMessage.senderName}`);
     });
 
-    // Event: Terima Statistik Realtime (UNTUK DASHBOARD)
     socket.on("server_stats", (stats: any) => {
       setMetrics((prev) => {
-        // Ambil latency terakhir (karena latency dihitung terpisah via Ping)
         const currentLatency =
           prev.length > 0 ? prev[prev.length - 1].latency : 0;
 
@@ -155,37 +140,31 @@ const App: React.FC = () => {
             minute: "2-digit",
             second: "2-digit",
           }),
-          latency: currentLatency, // Ini akan diupdate oleh fungsi Ping di bawah
-          throughput: stats.throughput, // DATA ASLI DARI SERVER
-          activeUsers: stats.activeUsers, // DATA ASLI DARI SERVER
-          wsOverhead: 2.4, // Konstan
-          tcpOverhead: 60, // Konstan
+          latency: currentLatency,
+          throughput: stats.throughput,
+          activeUsers: stats.activeUsers,
+          wsOverhead: 2.4,
+          tcpOverhead: 60,
         };
         return [...prev.slice(-19), newPoint];
       });
     });
 
-    // Event: Hasil Ping Pong (UNTUK LATENCY ASLI)
     socket.on("pong_check", (sentTimestamp: number) => {
-      const latency = Date.now() - sentTimestamp; // RTT (Round Trip Time)
-
-      // Update data grafik terakhir dengan latency asli
+      const latency = Date.now() - sentTimestamp;
       setMetrics((prev) => {
         if (prev.length === 0) return prev;
         const updated = [...prev];
-        // Update titik terakhir
         updated[updated.length - 1].latency = latency;
         return updated;
       });
     });
 
-    // --- INTERVAL PING (Setiap 2 Detik) ---
     const pingInterval = setInterval(() => {
       const start = Date.now();
-      socket.emit("ping_check", start); // Kirim Ping ke Server
+      socket.emit("ping_check", start);
     }, 2000);
 
-    // Teman Actions Listeners
     socket.on("friend_request", (data: any) => {
       if (currentUser && data.receiverId === currentUser.id) {
         setFriendships((prev) => [...prev, data]);
@@ -212,23 +191,13 @@ const App: React.FC = () => {
       socket.disconnect();
       clearInterval(pingInterval);
     };
-  }, [currentUser?.id, activeTab]); // Added activeTab to dep for unread logic correctness in closure? No, let's clearer approach. actually better not to rely on closure for activeTab in socket listener if we can avoid re-binding. The setMessages updater is safe. For unreadCounts, we need activeTab value. So we might need to use a ref for activeTab or accept re-binding. Since socket connection is heavy, let's use Ref for activeTab to avoid reconnects.
+  }, [currentUser?.id, activeTab]);
 
-  // Use Ref for activeTab to access current value inside socket listener without reconnecting
   const activeTabRef = React.useRef(activeTab);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
-
-  // Redefine the socket effect to NOT depend on activeTab directly, use Ref
-  // BUT wait, I modified the code above to depend on [currentUser?.id, activeTab]. This will reconnect socket on tab change which is BAD.
-  // Converting to REF pattern for activeTab inside the effect above would be better but I'm replacing a huge chunk.
-  // For simplicity and correctness with the replacing tool, I will remove activeTab from dependency array and use `activeTabRef` inside the listener in the replacement content below, if I could edit it.
-  // Actually, I can just use the previous logic but I need to be careful.
-  // Let's refine the replacement content to use Ref for activeTab.
-
   
-  // --- 2. FETCH DATA AWAL ---
   useEffect(() => {
-    if (!currentUser) return; // Only fetch data if logged in
+    if (!currentUser) return;
 
     const initApp = async () => {
       addLog("GET", "/api/init", "...", "Connecting to Nexus Engine...");
@@ -237,7 +206,6 @@ const App: React.FC = () => {
         const data = await res.json();
 
         setUsers(data.users || []);
-        // Maybe filter messages for user or fetch all public?
         setMessages(data.messages || []);
         setFriendships(data.friendships || []);
 
@@ -248,9 +216,8 @@ const App: React.FC = () => {
       }
     };
     initApp();
-  }, [currentUser]); // Fetch initial data when user logs in
+  }, [currentUser]);
 
-  // --- 3. HANDLERS ---
   const handleSendMessage = async (content: string, receiverId?: string) => {
     if (!currentUser) return;
     const messageData: Message = {
@@ -267,7 +234,6 @@ const App: React.FC = () => {
     try {
       addLog("POST", "/api/messages/send", "...", "Sending...");
       
-      // Optimistic UI update: CHECK DUPLICATES FIRST
       setMessages((prev) => {
           if (prev.some(m => m.id === messageData.id)) return prev;
           return [...prev, messageData]; 
@@ -280,9 +246,6 @@ const App: React.FC = () => {
       });
       const savedMsg = await res.json();
       
-      // Update with real data from server if needed (usually just ID/timestamp confirmation)
-      // Since we already added it, we might just leave it or replace it.
-      // Ideally, we don't add it again.
       addLog("POST", "/api/messages/send", 201, "Sent & Counted.");
     } catch (err) {
       addLog("POST", "/api/messages/send", 500, "Failed.");
@@ -339,7 +302,6 @@ const App: React.FC = () => {
         setView={setView}
         onLogout={async () => {
           const rememberToken = localStorage.getItem("nexus_remember_token");
-          // Call logout backend
           try {
               await fetch(`${API_URL}/auth/logout`, {
                   method: "POST",
@@ -350,7 +312,7 @@ const App: React.FC = () => {
 
           localStorage.removeItem("nexus_token"); 
           localStorage.removeItem("nexus_remember_token");
-          localStorage.removeItem("nexus_active_tab"); // Clear active chat on logout
+          localStorage.removeItem("nexus_active_tab");
           setCurrentUser(null);
         }}
         user={currentUser}

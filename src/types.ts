@@ -3,7 +3,7 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  password?: string; // Only for simulation
+  password?: string;
   role: 'admin' | 'user';
   status: 'online' | 'offline';
   lastPing: number;
@@ -13,7 +13,7 @@ export interface Message {
   id: string;
   senderId: string;
   senderName: string;
-  receiverId?: string; // If present, it's a private message
+  receiverId?: string;
   content: string;
   timestamp: number;
   type: 'text' | 'system' | 'broadcast';
@@ -39,7 +39,6 @@ export interface MetricPoint {
 export interface LogEntry {
   id: string;
   timestamp: string;
-  // Fix: Added 'PUT' and 'DELETE' to the allowed method types to support common HTTP verbs
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'WS' | 'AUTH';
   path: string;
   status: number | string;

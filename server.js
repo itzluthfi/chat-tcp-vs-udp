@@ -5,7 +5,7 @@ const mysql = require("mysql2/promise");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const crypto = require("crypto");
-const jwt = require("jsonwebtoken"); // Library wajib untuk UTS
+const jwt = require("jsonwebtoken");
 
 dotenv.config();
 
@@ -15,13 +15,11 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
-// Kunci Rahasia untuk enkripsi token (Harus ada untuk keamanan)
 const SECRET_KEY = process.env.JWT_SECRET || "nexus_secret_key_uts_2025";
 
 app.use(cors());
 app.use(express.json());
 
-// Database Connection Pool
 const pool = mysql.createPool({
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER || "root",
@@ -32,28 +30,23 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
-// --- LOGIKA MONITORING REALTIME (Syarat UTS) ---
-let throughputCounter = 0; // Menghitung pesan yang masuk per detik
+// === MONITORING REALTIME ===
+let throughputCounter = 0;
 
-// 1. Reset throughput counter setiap 1 detik
 setInterval(() => {
   throughputCounter = 0;
 }, 1000);
 
-// 2. Broadcast Data Statistik ke Dashboard (Frontend) setiap 2 detik
 setInterval(() => {
-  // Menghitung jumlah koneksi socket yang aktif
   const activeSockets = io.engine.clientsCount;
-
-  // Kirim data asli ke dashboard
   io.emit("server_stats", {
     activeUsers: activeSockets,
-    throughput: throughputCounter, // Data asli, bukan Math.random()
+    throughput: throughputCounter,
     timestamp: Date.now(),
   });
 }, 2000);
 
-// --- MIDDLEWARE AUTH ---
+// === MIDDLEWARE AUTH ===
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -67,10 +60,8 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
+// === API ROUTES ===
 
-// --- API ROUTES ---
-
-// Initial Sync
 app.get("/api/init", async (req, res) => {
   try {
     const [users] = await pool.query(
@@ -86,7 +77,6 @@ app.get("/api/init", async (req, res) => {
   }
 });
 
-// Login Auth (DENGAN JWT & REMEMBER ME)
 app.post("/api/auth/login", async (req, res) => {
   const { email, password, rememberMe } = req.body;
   try {
@@ -98,16 +88,14 @@ app.post("/api/auth/login", async (req, res) => {
     if (rows.length > 0) {
       const user = rows[0];
 
-      // Update status di database jadi online
       await pool.query('UPDATE users SET status = "online" WHERE id = ?', [
         user.id,
       ]);
 
-      // --- GENERATE TOKEN JWT (Security) ---
       const token = jwt.sign(
         { id: user.id, role: user.role, username: user.username },
         SECRET_KEY,
-        { expiresIn: "2h" } // Token kadaluarsa dalam 2 jam
+        { expiresIn: "2h" }
       );
 
       let rememberToken = null;
@@ -116,7 +104,6 @@ app.post("/api/auth/login", async (req, res) => {
         await pool.query('UPDATE users SET remember_token = ? WHERE id = ?', [rememberToken, user.id]);
       }
 
-      // Kirim Token + User Info (Password jangan dikirim balik!)
       const { password: _, remember_token: __, ...userSafe } = user;
       res.json({
         token,
@@ -131,7 +118,6 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// Refresh Token (Auto Login via Remember Token)
 app.post("/api/auth/refresh", async (req, res) => {
     const { rememberToken } = req.body;
     if (!rememberToken) return res.status(400).json({ error: "No token provided" });
@@ -141,7 +127,6 @@ app.post("/api/auth/refresh", async (req, res) => {
         if (rows.length > 0) {
             const user = rows[0];
             
-             // Update status di database jadi online
             await pool.query('UPDATE users SET status = "online" WHERE id = ?', [user.id]);
 
             const token = jwt.sign(
@@ -160,7 +145,6 @@ app.post("/api/auth/refresh", async (req, res) => {
     }
 });
 
-// Verify Token (Cek apakah JWT masih valid)
 app.get("/api/auth/verify", authenticateToken, async (req, res) => {
     try {
         const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [req.user.id]);
@@ -176,7 +160,6 @@ app.get("/api/auth/verify", authenticateToken, async (req, res) => {
     }
 });
 
-// Logout
 app.post("/api/auth/logout", async (req, res) => {
     const { rememberToken, userId } = req.body;
     try {
@@ -192,13 +175,10 @@ app.post("/api/auth/logout", async (req, res) => {
     }
 });
 
-
-// Send Message (DENGAN TRACKING METRIK)
 app.post("/api/messages/send", async (req, res) => {
   const { id, senderId, senderName, receiverId, content, timestamp, type } =
     req.body;
 
-  // Naikkan counter throughput (Untuk grafik dashboard)
   throughputCounter++;
 
   try {
@@ -218,7 +198,6 @@ app.post("/api/messages/send", async (req, res) => {
       status: "delivered",
     };
 
-    // Broadcast via Socket
     io.emit("receive_message", messageData);
 
     res.status(201).json(messageData);
@@ -227,7 +206,6 @@ app.post("/api/messages/send", async (req, res) => {
   }
 });
 
-// Friend Actions
 app.post("/api/friendships/action", async (req, res) => {
   const { senderId, receiverId, action } = req.body;
   try {
@@ -256,13 +234,11 @@ app.post("/api/friendships/action", async (req, res) => {
   }
 });
 
-// --- SOCKET.IO HANDLERS ---
+// === SOCKET.IO HANDLERS (TCP/WebSocket) ===
 io.on("connection", (socket) => {
   console.log("User Connected:", socket.id);
 
-  // LOGIKA PING-PONG (Untuk menghitung Latency di Frontend)
   socket.on("ping_check", (clientTimestamp) => {
-    // Server langsung membalas "Pong" agar client bisa hitung selisih waktu
     socket.emit("pong_check", clientTimestamp);
   });
 

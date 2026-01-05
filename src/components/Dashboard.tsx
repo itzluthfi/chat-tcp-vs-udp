@@ -27,7 +27,6 @@ const Dashboard: React.FC<DashboardProps> = ({ metrics }) => {
     wsOverhead: 4,
   };
 
-  // Comparative data for the bar chart
   const protocolComparison = [
     {
       name: "TCP Header",

@@ -3,7 +3,7 @@ import { User } from "../types";
 
 interface LoginProps {
   onLogin: (user: User) => void;
-  availableUsers: User[]; // Prop ini jadi tidak terpakai, tapi biarkan agar tidak error di App.tsx
+  availableUsers: User[];
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
@@ -20,7 +20,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError("");
 
     try {
-      // HIT API LOGIN KE BACKEND
       const response = await fetch("http://localhost:3000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -33,7 +32,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         throw new Error(data.error || "Login gagal.");
       }
 
-      // SIMPAN JWT TOKEN (PENTING UNTUK SYARAT UTS)
       localStorage.setItem("nexus_token", data.token);
       
       if (data.rememberToken) {
@@ -42,7 +40,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         localStorage.removeItem("nexus_remember_token");
       }
 
-      // Masuk ke aplikasi dengan data user asli dari DB
       onLogin({ ...data.user, status: "online" });
     } catch (err: any) {
       setError(err.message);
@@ -158,7 +155,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </button>
         </div>
 
-        {/* DEMO PANEL (Sama seperti sebelumnya, hanya UI helper) */}
         <div
           className={`overflow-hidden transition-all duration-500 ease-in-out bg-slate-900/50 border border-slate-800 border-l-0 rounded-r-3xl backdrop-blur-sm ${
             showDemoPanel
