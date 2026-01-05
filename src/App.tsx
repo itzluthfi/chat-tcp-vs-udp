@@ -185,9 +185,9 @@ const App: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(messageData),
       });
-      const savedMsg = await res.json();
-      // Optimistic UI update
-      setMessages((prev) => [...prev, savedMsg]);
+      // const savedMsg = await res.json();
+      // // Optimistic UI update
+      // setMessages((prev) => [...prev, savedMsg]);
       addLog("POST", "/api/messages/send", 201, "Sent & Counted.");
     } catch (err) {
       addLog("POST", "/api/messages/send", 500, "Failed.");

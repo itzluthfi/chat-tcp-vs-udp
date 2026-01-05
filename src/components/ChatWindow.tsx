@@ -95,7 +95,29 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const filteredMessages = messages.filter((m) => {
-    if (activeTab === "global") return !m.receiverId;
+    // 1. Normalisasi Data:
+    // Kadang dari DB atau JSON, null bisa terbaca sebagai string "null" atau string kosong ""
+    // Kita paksa mereka dianggap sebagai NULL/undefined agar konsisten.
+    const rawReceiver = m.receiverId;
+    const isGlobalMessage =
+      rawReceiver === null ||
+      rawReceiver === undefined ||
+      rawReceiver === "" ||
+      rawReceiver === "null"; // Jaga-jaga jika backend kirim string "null"
+
+    // 2. LOGIKA UNTUK TAB GLOBAL (PUBLIC CHAT)
+    if (activeTab === "global") {
+      // Hanya tampilkan jika benar-benar pesan global
+      return isGlobalMessage;
+    }
+
+    // 3. LOGIKA UNTUK TAB PRIVATE
+    // Jangan tampilkan pesan global di tab private
+    if (isGlobalMessage) return false;
+
+    // Tampilkan pesan private hanya jika:
+    // A. Saya pengirimnya, dan receivernya adalah User di Tab Aktif
+    // B. User di Tab Aktif pengirimnya, dan saya receivernya
     return (
       (m.senderId === currentUser.id && m.receiverId === activeTab) ||
       (m.senderId === activeTab && m.receiverId === currentUser.id)

@@ -5,6 +5,8 @@ const mysql = require("mysql2/promise");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const jwt = require("jsonwebtoken"); // Library wajib untuk UTS
+const onlineUsers = new Map();
+
 
 dotenv.config();
 
@@ -34,12 +36,10 @@ const pool = mysql.createPool({
 // --- LOGIKA MONITORING REALTIME (Syarat UTS) ---
 let throughputCounter = 0; // Menghitung pesan yang masuk per detik
 
-// 1. Reset throughput counter setiap 1 detik
 setInterval(() => {
   throughputCounter = 0;
 }, 1000);
 
-// 2. Broadcast Data Statistik ke Dashboard (Frontend) setiap 2 detik
 setInterval(() => {
   // Menghitung jumlah koneksi socket yang aktif
   const activeSockets = io.engine.clientsCount;
@@ -60,9 +60,24 @@ app.get("/api/init", async (req, res) => {
     const [users] = await pool.query(
       "SELECT id, username, email, role, status FROM users"
     );
-    const [messages] = await pool.query(
-      "SELECT * FROM messages ORDER BY timestamp ASC LIMIT 100"
-    );
+
+
+    const [messages] = await pool.query(`
+      SELECT 
+        m.id, 
+        m.sender_id AS senderId,
+        u.username AS senderName, 
+        m.receiver_id AS receiverId, 
+        m.content, 
+        m.timestamp, 
+        m.type, 
+        m.status 
+      FROM messages m
+      LEFT JOIN users u ON m.sender_id = u.id
+      ORDER BY m.timestamp ASC 
+      LIMIT 100
+    `);
+
     const [friendships] = await pool.query("SELECT * FROM friendships");
     res.json({ users, messages, friendships });
   } catch (err) {
@@ -94,7 +109,6 @@ app.post("/api/auth/login", async (req, res) => {
         { expiresIn: "2h" } // Token kadaluarsa dalam 2 jam
       );
 
-      // Kirim Token + User Info (Password jangan dikirim balik!)
       const { password: _, ...userSafe } = user;
       res.json({
         token,
@@ -108,36 +122,38 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// Send Message (DENGAN TRACKING METRIK)
 app.post("/api/messages/send", async (req, res) => {
+  // Ambil data
   const { id, senderId, senderName, receiverId, content, timestamp, type } =
     req.body;
 
-  // Naikkan counter throughput (Untuk grafik dashboard)
+  const finalReceiverId = receiverId ? receiverId : null;
+
   throughputCounter++;
 
   try {
     await pool.query(
       "INSERT INTO messages (id, sender_id, receiver_id, content, timestamp, type, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [id, senderId, receiverId || null, content, timestamp, type, "sent"]
+      [id, senderId, finalReceiverId, content, timestamp, type, "sent"] // Gunakan finalReceiverId
     );
 
+    
     const messageData = {
       id,
       senderId,
       senderName,
-      receiverId,
+      receiverId: finalReceiverId, // Kirim balik NULL ke frontend
       content,
       timestamp,
       type,
       status: "delivered",
     };
 
-    // Broadcast via Socket
     io.emit("receive_message", messageData);
 
     res.status(201).json(messageData);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -173,16 +189,45 @@ app.post("/api/friendships/action", async (req, res) => {
 
 // --- SOCKET.IO HANDLERS ---
 io.on("connection", (socket) => {
-  console.log("User Connected:", socket.id);
+  console.log(`🔌 User Connected: ${socket.id}`);
 
-  // LOGIKA PING-PONG (Untuk menghitung Latency di Frontend)
+
+  socket.on("register_session", async (userId) => {
+    onlineUsers.set(socket.id, userId); // Catat di memori
+
+    
+    await pool.query('UPDATE users SET status = "online" WHERE id = ?', [
+      userId,
+    ]);
+
+    const [users] = await pool.query(
+      "SELECT id, username, email, role, status FROM users"
+    );
+    io.emit("user_status_update", users);
+  });
+
   socket.on("ping_check", (clientTimestamp) => {
-    // Server langsung membalas "Pong" agar client bisa hitung selisih waktu
     socket.emit("pong_check", clientTimestamp);
   });
 
-  socket.on("disconnect", () => {
-    console.log("User Disconnected:", socket.id);
+  socket.on("disconnect", async () => {
+    console.log(`❌ User Disconnected: ${socket.id}`);
+
+    const userId = onlineUsers.get(socket.id);
+
+    if (userId) {
+
+      await pool.query('UPDATE users SET status = "offline" WHERE id = ?', [
+        userId,
+      ]);
+
+      onlineUsers.delete(socket.id);
+
+      const [users] = await pool.query(
+        "SELECT id, username, email, role, status FROM users"
+      );
+      io.emit("user_status_update", users);
+    }
   });
 });
 
