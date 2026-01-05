@@ -278,17 +278,12 @@ const App: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(messageData),
       });
-<<<<<<< HEAD
       // const savedMsg = await res.json();
       // // Optimistic UI update
       // setMessages((prev) => [...prev, savedMsg]);
-=======
+
       const savedMsg = await res.json();
       
-      // Update with real data from server if needed (usually just ID/timestamp confirmation)
-      // Since we already added it, we might just leave it or replace it.
-      // Ideally, we don't add it again.
->>>>>>> c4c763ca24fc7e2616965baefccbaa377923c004
       addLog("POST", "/api/messages/send", 201, "Sent & Counted.");
     } catch (err) {
       addLog("POST", "/api/messages/send", 500, "Failed.");
