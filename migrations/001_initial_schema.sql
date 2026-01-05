@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS friendships (
     FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 4. Seed Data (Data Awal untuk Testing) - Using INSERT IGNORE to avoid duplicates on re-run if partial
+-- 4. Seed Data 
 INSERT IGNORE INTO users (id, username, email, password, role, status) VALUES 
 ('1', 'Admin_Nexus', 'admin@nexus.io', 'admin', 'admin', 'offline'),
 ('2', 'Alex_Net', 'alex@nexus.io', 'user', 'user', 'offline'),

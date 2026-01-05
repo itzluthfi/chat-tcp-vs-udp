@@ -83,7 +83,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   unreadCounts,
 }) => {
   const [input, setInput] = useState("");
-  // Local activeTab state REMOVED - using props
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
