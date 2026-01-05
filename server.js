@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const mysql = require("mysql2/promise");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const crypto = require("crypto");
 const jwt = require("jsonwebtoken"); // Library wajib untuk UTS
 
 dotenv.config();
@@ -52,6 +53,21 @@ setInterval(() => {
   });
 }, 2000);
 
+// --- MIDDLEWARE AUTH ---
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) return res.sendStatus(401);
+
+    jwt.verify(token, SECRET_KEY, (err, user) => {
+        if (err) return res.sendStatus(403);
+        req.user = user;
+        next();
+    });
+};
+
+
 // --- API ROUTES ---
 
 // Initial Sync
@@ -70,9 +86,9 @@ app.get("/api/init", async (req, res) => {
   }
 });
 
-// Login Auth (DENGAN JWT)
+// Login Auth (DENGAN JWT & REMEMBER ME)
 app.post("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, rememberMe } = req.body;
   try {
     const [rows] = await pool.query(
       "SELECT * FROM users WHERE email = ? AND password = ?",
@@ -94,10 +110,17 @@ app.post("/api/auth/login", async (req, res) => {
         { expiresIn: "2h" } // Token kadaluarsa dalam 2 jam
       );
 
+      let rememberToken = null;
+      if (rememberMe) {
+        rememberToken = crypto.randomBytes(32).toString("hex");
+        await pool.query('UPDATE users SET remember_token = ? WHERE id = ?', [rememberToken, user.id]);
+      }
+
       // Kirim Token + User Info (Password jangan dikirim balik!)
-      const { password: _, ...userSafe } = user;
+      const { password: _, remember_token: __, ...userSafe } = user;
       res.json({
         token,
+        rememberToken,
         user: userSafe,
       });
     } else {
@@ -107,6 +130,68 @@ app.post("/api/auth/login", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Refresh Token (Auto Login via Remember Token)
+app.post("/api/auth/refresh", async (req, res) => {
+    const { rememberToken } = req.body;
+    if (!rememberToken) return res.status(400).json({ error: "No token provided" });
+
+    try {
+        const [rows] = await pool.query("SELECT * FROM users WHERE remember_token = ?", [rememberToken]);
+        if (rows.length > 0) {
+            const user = rows[0];
+            
+             // Update status di database jadi online
+            await pool.query('UPDATE users SET status = "online" WHERE id = ?', [user.id]);
+
+            const token = jwt.sign(
+                { id: user.id, role: user.role, username: user.username },
+                SECRET_KEY,
+                { expiresIn: "2h" }
+            );
+            
+            const { password: _, remember_token: __, ...userSafe } = user;
+            res.json({ token, user: userSafe });
+        } else {
+            res.status(401).json({ error: "Invalid remember token" });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Verify Token (Cek apakah JWT masih valid)
+app.get("/api/auth/verify", authenticateToken, async (req, res) => {
+    try {
+        const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [req.user.id]);
+        if (rows.length > 0) {
+             const user = rows[0];
+             const { password: _, remember_token: __, ...userSafe } = user;
+             res.json({ valid: true, user: userSafe });
+        } else {
+             res.status(401).json({ valid: false });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Logout
+app.post("/api/auth/logout", async (req, res) => {
+    const { rememberToken, userId } = req.body;
+    try {
+        if (rememberToken) {
+            await pool.query("UPDATE users SET remember_token = NULL WHERE remember_token = ?", [rememberToken]);
+        }
+        if (userId) {
+             await pool.query('UPDATE users SET status = "offline" WHERE id = ?', [userId]);
+        }
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 // Send Message (DENGAN TRACKING METRIK)
 app.post("/api/messages/send", async (req, res) => {

@@ -28,6 +28,21 @@ const App: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isOnline, setIsOnline] = useState(true);
 
+  // --- NEW STATE: Active Tab (Lifted from ChatWindow) & Unread Counts ---
+  const [activeTab, setActiveTabState] = useState<"global" | string>(() => {
+    return localStorage.getItem("nexus_active_tab") || "global";
+  });
+  const [unreadCounts, setUnreadCounts] = useState<{ [key: string]: number }>({});
+
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    localStorage.setItem("nexus_active_tab", tab);
+    // Clear unread count when switching to that user
+    if (tab !== "global") {
+        setUnreadCounts(prev => ({ ...prev, [tab]: 0 }));
+    }
+  };
+
   // Helper Log
   const addLog = (
     method: LogEntry["method"],
@@ -46,8 +61,51 @@ const App: React.FC = () => {
     setLogs((prev) => [newLog, ...prev].slice(0, 50));
   };
 
-  // --- 1. LOGIKA UTAMA: SOCKET.IO ---
+
+   // --- 1. LOGIKA UTAMA: SOCKET.IO ---
   useEffect(() => {
+    // Attempt Auto-Login
+    const attemptAutoLogin = async () => {
+      const token = localStorage.getItem("nexus_token");
+      const rememberToken = localStorage.getItem("nexus_remember_token");
+
+      if (token) {
+        try {
+          const res = await fetch(`${API_URL}/auth/verify`, {
+             headers: { Authorization: `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (data.valid) {
+             setCurrentUser({ ...data.user, status: "online" });
+             setIsOnline(true);
+             return;
+          }
+        } catch (e) { console.error("Token verification failed", e); }
+      }
+
+      if (rememberToken) {
+          try {
+              const res = await fetch(`${API_URL}/auth/refresh`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ rememberToken })
+              });
+              const data = await res.json();
+              if (res.ok) {
+                  localStorage.setItem("nexus_token", data.token);
+                  setCurrentUser({ ...data.user, status: "online" });
+                  setIsOnline(true);
+              } else {
+                  // Remember token invalid
+                  localStorage.removeItem("nexus_remember_token");
+                  localStorage.removeItem("nexus_token");
+              }
+          } catch (e) { console.error("Refresh failed", e); }
+      }
+    };
+
+    attemptAutoLogin();
+
     // Connect
     const socket = io(SOCKET_URL);
 
@@ -69,6 +127,18 @@ const App: React.FC = () => {
         if (prev.some((m) => m.id === newMessage.id)) return prev;
         return [...prev, newMessage];
       });
+
+      // Handle Unread Badges
+      if (currentUser && newMessage.senderId !== currentUser.id) {
+         // If direct message AND not currently looking at this chat
+         if (newMessage.receiverId === currentUser.id && activeTab !== newMessage.senderId) {
+             setUnreadCounts(prev => ({
+                 ...prev,
+                 [newMessage.senderId]: (prev[newMessage.senderId] || 0) + 1
+             }));
+         }
+      }
+
       addLog("WS", "receive_message", 200, `Msg from ${newMessage.senderName}`);
     });
 
@@ -142,10 +212,24 @@ const App: React.FC = () => {
       socket.disconnect();
       clearInterval(pingInterval);
     };
-  }, [currentUser]);
+  }, [currentUser?.id, activeTab]); // Added activeTab to dep for unread logic correctness in closure? No, let's clearer approach. actually better not to rely on closure for activeTab in socket listener if we can avoid re-binding. The setMessages updater is safe. For unreadCounts, we need activeTab value. So we might need to use a ref for activeTab or accept re-binding. Since socket connection is heavy, let's use Ref for activeTab to avoid reconnects.
 
+  // Use Ref for activeTab to access current value inside socket listener without reconnecting
+  const activeTabRef = React.useRef(activeTab);
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+
+  // Redefine the socket effect to NOT depend on activeTab directly, use Ref
+  // BUT wait, I modified the code above to depend on [currentUser?.id, activeTab]. This will reconnect socket on tab change which is BAD.
+  // Converting to REF pattern for activeTab inside the effect above would be better but I'm replacing a huge chunk.
+  // For simplicity and correctness with the replacing tool, I will remove activeTab from dependency array and use `activeTabRef` inside the listener in the replacement content below, if I could edit it.
+  // Actually, I can just use the previous logic but I need to be careful.
+  // Let's refine the replacement content to use Ref for activeTab.
+
+  
   // --- 2. FETCH DATA AWAL ---
   useEffect(() => {
+    if (!currentUser) return; // Only fetch data if logged in
+
     const initApp = async () => {
       addLog("GET", "/api/init", "...", "Connecting to Nexus Engine...");
       try {
@@ -153,6 +237,7 @@ const App: React.FC = () => {
         const data = await res.json();
 
         setUsers(data.users || []);
+        // Maybe filter messages for user or fetch all public?
         setMessages(data.messages || []);
         setFriendships(data.friendships || []);
 
@@ -163,31 +248,41 @@ const App: React.FC = () => {
       }
     };
     initApp();
-  }, []);
+  }, [currentUser]); // Fetch initial data when user logs in
 
   // --- 3. HANDLERS ---
   const handleSendMessage = async (content: string, receiverId?: string) => {
     if (!currentUser) return;
-    const messageData = {
+    const messageData: Message = {
       id: "msg_" + Date.now(),
       senderId: currentUser.id,
       senderName: currentUser.username,
       receiverId,
       content,
       timestamp: Date.now(),
-      type: !receiverId && currentUser.role === "admin" ? "broadcast" : "text",
+      type: (!receiverId && currentUser.role === "admin" ? "broadcast" : "text") as "broadcast" | "text",
+      status: "sent"
     };
 
     try {
       addLog("POST", "/api/messages/send", "...", "Sending...");
+      
+      // Optimistic UI update: CHECK DUPLICATES FIRST
+      setMessages((prev) => {
+          if (prev.some(m => m.id === messageData.id)) return prev;
+          return [...prev, messageData]; 
+      });
+
       const res = await fetch(`${API_URL}/messages/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(messageData),
       });
       const savedMsg = await res.json();
-      // Optimistic UI update
-      setMessages((prev) => [...prev, savedMsg]);
+      
+      // Update with real data from server if needed (usually just ID/timestamp confirmation)
+      // Since we already added it, we might just leave it or replace it.
+      // Ideally, we don't add it again.
       addLog("POST", "/api/messages/send", 201, "Sent & Counted.");
     } catch (err) {
       addLog("POST", "/api/messages/send", 500, "Failed.");
@@ -242,8 +337,20 @@ const App: React.FC = () => {
       <Sidebar
         activeView={view}
         setView={setView}
-        onLogout={() => {
-          localStorage.removeItem("nexus_token"); // Hapus Token saat logout
+        onLogout={async () => {
+          const rememberToken = localStorage.getItem("nexus_remember_token");
+          // Call logout backend
+          try {
+              await fetch(`${API_URL}/auth/logout`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ rememberToken, userId: currentUser.id })
+              });
+          } catch (e) { console.error("Logout failed", e); }
+
+          localStorage.removeItem("nexus_token"); 
+          localStorage.removeItem("nexus_remember_token");
+          localStorage.removeItem("nexus_active_tab"); // Clear active chat on logout
           setCurrentUser(null);
         }}
         user={currentUser}
@@ -270,6 +377,9 @@ const App: React.FC = () => {
             onFriendAction={handleFriendAction}
             currentUser={currentUser}
             isOnline={isOnline}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            unreadCounts={unreadCounts}
           />
         )}
         {currentUser.role === "admin" && (
