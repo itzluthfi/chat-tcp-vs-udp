@@ -13,6 +13,9 @@ interface ChatWindowProps {
   ) => void;
   currentUser: User;
   isOnline: boolean;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  unreadCounts: { [key: string]: number };
 }
 
 const SignalIndicator: React.FC<{ active: boolean }> = ({ active }) => {
@@ -75,9 +78,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   onFriendAction,
   currentUser,
   isOnline,
+  activeTab,
+  setActiveTab,
+  unreadCounts,
 }) => {
   const [input, setInput] = useState("");
-  const [activeTab, setActiveTab] = useState<"global" | string>("global");
+  // Local activeTab state REMOVED - using props
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -254,6 +260,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                   {new Date(msg.timestamp).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
+                    second: "2-digit",
                   })}
                   {isMe && (
                     <i className="fas fa-check-double ml-1 text-emerald-500"></i>
@@ -375,16 +382,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                           <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-slate-950 rounded-full"></div>
                         )}
                       </div>
-                      <div className="text-left overflow-hidden">
-                        <p
-                          className={`text-sm font-bold truncate tracking-tight ${
-                            activeTab === user.id
-                              ? "text-indigo-400"
-                              : "text-slate-400"
-                          }`}
-                        >
-                          {user.username}
-                        </p>
+                      <div className="text-left overflow-hidden flex-1">
+                        <div className="flex justify-between items-center">
+                          <p
+                            className={`text-sm font-bold truncate tracking-tight ${
+                              activeTab === user.id
+                                ? "text-indigo-400"
+                                : "text-slate-400"
+                            }`}
+                          >
+                            {user.username}
+                          </p>
+                          {unreadCounts[user.id] > 0 && (
+                            <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 min-w-[18px] h-[18px] rounded-full flex items-center justify-center animate-in zoom-in">
+                              {unreadCounts[user.id]}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[9px] font-black uppercase tracking-tighter opacity-60 text-slate-500">
                           {user.status === "online" ? "Online" : "Offline"}
                         </p>

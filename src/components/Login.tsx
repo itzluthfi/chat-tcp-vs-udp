@@ -9,6 +9,7 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [showDemoPanel, setShowDemoPanel] = useState(false);
@@ -23,7 +24,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       const response = await fetch("http://localhost:3000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
       });
 
       const data = await response.json();
@@ -34,6 +35,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
       // SIMPAN JWT TOKEN (PENTING UNTUK SYARAT UTS)
       localStorage.setItem("nexus_token", data.token);
+      
+      if (data.rememberToken) {
+        localStorage.setItem("nexus_remember_token", data.rememberToken);
+      } else {
+        localStorage.removeItem("nexus_remember_token");
+      }
 
       // Masuk ke aplikasi dengan data user asli dari DB
       onLogin({ ...data.user, status: "online" });
@@ -99,6 +106,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 placeholder="••••••"
                 className="w-full bg-slate-800 border border-slate-700 rounded-2xl py-4 px-5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600/50 transition-all text-sm"
               />
+            </div>
+
+             <div className="flex items-center">
+              <input
+                id="remember-me"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 text-indigo-600 bg-slate-800 border-slate-700 rounded focus:ring-indigo-500 focus:ring-2"
+              />
+              <label htmlFor="remember-me" className="ml-2 text-sm font-medium text-slate-400 cursor-pointer">
+                Remember me
+              </label>
             </div>
 
             {error && (
