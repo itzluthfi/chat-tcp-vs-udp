@@ -402,12 +402,36 @@ io.on("connection", (socket) => {
 
   // === FITUR ROOM (TCP) ===
   socket.on("join_room", (roomId) => {
-    socket.join(roomId); // Fitur native Socket.io
+    socket.join(roomId);
     console.log(`User ${socket.id} joined room ${roomId}`);
+
+    // PENTING: Beritahu penghuni room lain bahwa ada user baru
+    // Ini memicu client lama untuk mengirim WebRTC Offer
+    socket.to(roomId).emit("user_joined_room", socket.id);
   });
 
   socket.on("leave_room", (roomId) => {
     socket.leave(roomId);
+    socket.to(roomId).emit("user_left_room", socket.id);
+  });
+
+
+  socket.on("close_room", async (roomId) => {
+    console.log(`Room ${roomId} closed by creator`);
+
+    try {
+      // 1. Update DB
+      await pool.query("UPDATE rooms SET is_active = 0 WHERE id = ?", [roomId]);
+
+      // 2. Tendang peserta DI DALAM room
+      io.to(roomId).emit("room_destroyed");
+      io.in(roomId).socketsLeave(roomId);
+
+      // 3. (BARU) Beritahu SEMUA ORANG di Lobby untuk hapus room dari list
+      io.emit("room_closed", roomId);
+    } catch (err) {
+      console.error(err);
+    }
   });
 
   // === FITUR WEBRTC SIGNALING (Hybrid UDP Bridge) ===

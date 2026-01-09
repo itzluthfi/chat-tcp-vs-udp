@@ -21,7 +21,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   const isAdmin = user.role === "admin";
 
   const menuItems = [
-    { id: "chat", icon: "fa-comments", label: "Chat", show: true },
+    // 1. Chat Biasa (Global/Private)
+    { id: "chat", icon: "fa-comments", label: "Private Chat", show: true },
+
+    // 2. MENU BARU: Public Rooms
+    { id: "rooms", icon: "fa-users", label: "Public Rooms", show: true },
+
+    // 3. Admin Tools
     {
       id: "monitoring",
       icon: "fa-chart-line",
@@ -34,6 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
+      {/* Header Logo */}
       <div className="p-6 border-b border-slate-700 flex items-center gap-3">
         <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
           <i className="fas fa-network-wired text-white text-xl"></i>
@@ -48,6 +55,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
+      {/* Navigation Menu */}
       <nav className="flex-1 py-4 px-3 space-y-1">
         {menuItems
           .filter((item) => item.show)
@@ -65,6 +73,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <i className={`fas ${item.icon} text-lg w-6`}></i>
                 <span className="font-medium">{item.label}</span>
               </div>
+
+              {/* Notifikasi Pesan Baru (Khusus Tab Chat) */}
               {item.id === "chat" && pendingRequests > 0 && (
                 <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
                   {pendingRequests}
@@ -74,6 +84,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           ))}
       </nav>
 
+      {/* User Footer Profile */}
       <div className="p-4 bg-slate-800/50 border-t border-slate-700">
         <div className="flex items-center gap-3 p-2 mb-4 bg-slate-900/50 rounded-lg border border-slate-700/50">
           <div className="relative">

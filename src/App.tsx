@@ -7,6 +7,7 @@ import {
   ViewType,
   LogEntry,
   Friendship,
+  Room,
 } from "./types";
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
@@ -15,6 +16,8 @@ import NetworkLab from "./components/NetworkLab";
 import KernelLogs from "./components/KernelLogs";
 import Login from "./components/Login";
 import Register from "./components/Register";
+import RoomList from "./components/RoomList";
+import VideoRoom from "./components/VideoRoom";
 
 const API_URL = "http://localhost:3000/api";
 const SOCKET_URL = "http://localhost:3000";
@@ -26,9 +29,14 @@ const App: React.FC = () => {
   // 1. State Loading Session
   const [isCheckingSession, setIsCheckingSession] = useState(true);
 
+  // VIEW STATE
   const [view, setView] = useState<ViewType>("chat");
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(null); // State untuk Video Call
+
+  // DATA STATE
   const [messages, setMessages] = useState<Message[]>([]);
   const [friendships, setFriendships] = useState<Friendship[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [metrics, setMetrics] = useState<MetricPoint[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -72,14 +80,13 @@ const App: React.FC = () => {
   // === EFFECT 1: AUTO LOGIN (Jalan Sekali saat Mount) ===
   useEffect(() => {
     const attemptAutoLogin = async () => {
-      setIsCheckingSession(true); // Mulai loading
+      setIsCheckingSession(true);
       console.log("🔄 Memulai Auto Login...");
 
       const token = localStorage.getItem("nexus_token");
       const rememberToken = localStorage.getItem("nexus_remember_token");
 
       try {
-        // Cek JWT
         if (token) {
           const res = await fetch(`${API_URL}/auth/verify`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -94,17 +101,12 @@ const App: React.FC = () => {
               return;
             }
           } else {
-            // TAMBAHAN: Jika server menolak (misal 401/403), hapus token busuk ini
-            console.warn(
-              "⚠️ Token ditolak server (Mungkin user DB sudah reset). Menghapus token..."
-            );
+            console.warn("⚠️ Token ditolak server. Menghapus token...");
             localStorage.removeItem("nexus_token");
           }
         }
 
-        // Cek Remember Token (Fallback)
         if (rememberToken) {
-          console.log("🔄 Mencoba Remember Token...");
           const res = await fetch(`${API_URL}/auth/refresh`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -113,19 +115,17 @@ const App: React.FC = () => {
 
           if (res.ok) {
             const data = await res.json();
-            console.log("✅ Remember Token Valid! New Token received.");
             localStorage.setItem("nexus_token", data.token);
             setCurrentUser({ ...data.user, status: "online" });
           } else {
-            console.error("❌ Remember Token ditolak server.");
             localStorage.removeItem("nexus_remember_token");
             localStorage.removeItem("nexus_token");
           }
         }
       } catch (e) {
-        console.error("❌ Auto login error (Network/Server):", e);
+        console.error("❌ Auto login error:", e);
       } finally {
-        setIsCheckingSession(false); // Selesai loading
+        setIsCheckingSession(false);
       }
     };
 
@@ -134,7 +134,6 @@ const App: React.FC = () => {
 
   // === EFFECT 2: SOCKET.IO (Jalan saat User Login/Logout) ===
   useEffect(() => {
-    // Jika tidak ada user, pastikan socket mati
     if (!currentUser) {
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -144,18 +143,14 @@ const App: React.FC = () => {
       return;
     }
 
-    // Jika socket sudah ada dan connect, jangan buat lagi
     if (socketRef.current && socketRef.current.connected) return;
 
-    // Inisialisasi Socket Baru
-    console.log("🔌 Connecting Socket.io for user:", currentUser.id);
     const socket = io(SOCKET_URL);
     socketRef.current = socket;
 
     socket.on("connect", () => {
       addLog("WS", "/socket.io", "CONNECTED", `Socket ID: ${socket.id}`);
       setIsOnline(true);
-      // 🔥 LAPOR DIRI KE SERVER
       socket.emit("register_session", currentUser.id);
     });
 
@@ -179,7 +174,6 @@ const App: React.FC = () => {
           [newMessage.senderId]: (prev[newMessage.senderId] || 0) + 1,
         }));
       }
-      addLog("WS", "receive_message", 200, `Msg from ${newMessage.senderName}`);
     });
 
     socket.on("server_stats", (stats: any) => {
@@ -240,8 +234,26 @@ const App: React.FC = () => {
       );
     });
 
-    socket.on("room_created", (newRoom: any) => {
+    // --- SOCKET ROOM EVENTS ---
+    socket.on("room_created", (newRoom: Room) => {
+      setRooms((prev) => [...prev, newRoom]);
       addLog("WS", "room_created", 200, `New room: ${newRoom.name}`);
+    });
+
+    // Jika room dihapus oleh creator
+    // socket.on("room_destroyed", () => {
+    //   // Logika force close ada di VideoRoom, tapi disini kita bisa update list
+    //   // Sebenarnya idealnya fetch ulang list room atau filter out
+    // });
+
+    socket.on("room_closed", (closedRoomId: string) => {
+      setRooms((prev) => prev.filter((r) => r.id !== closedRoomId));
+      addLog("WS", "room_closed", 200, `Room removed: ${closedRoomId}`);
+
+      // Jaga-jaga jika kita sedang memegang ID room yang baru saja dihapus
+      if (activeRoomId === closedRoomId) {
+        setActiveRoomId(null);
+      }
     });
 
     return () => {
@@ -262,6 +274,7 @@ const App: React.FC = () => {
         setUsers(data.users || []);
         setMessages(data.messages || []);
         setFriendships(data.friendships || []);
+        setRooms(data.rooms || []); // Load Rooms
         addLog("GET", "/api/init", 200, "Synced.");
       } catch (err) {
         setIsOnline(false);
@@ -269,6 +282,8 @@ const App: React.FC = () => {
     };
     initApp();
   }, [currentUser?.id]);
+
+  // --- HANDLERS UTAMA ---
 
   const handleSendMessage = async (content: string, receiverId?: string) => {
     if (!currentUser) return;
@@ -286,17 +301,12 @@ const App: React.FC = () => {
     };
 
     try {
-      addLog("POST", "/messages/send", "...", "Sending...");
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === messageData.id)) return prev;
-        return [...prev, messageData];
-      });
+      setMessages((prev) => [...prev, messageData]);
       await fetch(`${API_URL}/messages/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(messageData),
       });
-      addLog("POST", "/messages/send", 201, "Sent.");
     } catch (err) {
       console.error(err);
     }
@@ -333,9 +343,27 @@ const App: React.FC = () => {
     }
   };
 
-  // --- RENDER LOGIC DIPERBAIKI ---
+  // --- ROOM HANDLERS ---
 
-  // 1. Tampilkan Loading Screen saat Cek Token (PENTING!)
+  const handleCreateRoom = async (name: string) => {
+    if (!currentUser) return;
+    try {
+      await fetch(`${API_URL}/rooms/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, creatorId: currentUser.id }),
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleJoinRoom = (roomId: string) => {
+    setActiveRoomId(roomId);
+  };
+
+  // --- RENDER LOGIC ---
+
   if (isCheckingSession) {
     return (
       <div className="flex h-screen bg-slate-950 items-center justify-center flex-col gap-4">
@@ -347,7 +375,6 @@ const App: React.FC = () => {
     );
   }
 
-  // 2. Jika pengecekan selesai dan tidak ada user -> Login/Register
   if (!currentUser) {
     if (showRegister)
       return <Register onSwitchToLogin={() => setShowRegister(false)} />;
@@ -360,7 +387,22 @@ const App: React.FC = () => {
     );
   }
 
-  // 3. Jika User ada -> Dashboard
+  // --- MODE VIDEO CALL (FULL SCREEN) ---
+  // Cari data room lengkap berdasarkan ID
+  const currentRoomData = rooms.find((r) => r.id === activeRoomId);
+
+  if (activeRoomId && socketRef.current && currentRoomData) {
+    return (
+      <VideoRoom
+        activeRoom={currentRoomData} // PASS OBJECT ROOM
+        currentUser={currentUser}
+        socket={socketRef.current}
+        onLeave={() => setActiveRoomId(null)}
+      />
+    );
+  }
+
+  // --- MODE DASHBOARD / CHAT BIASA ---
   return (
     <div className="flex h-screen bg-slate-900 overflow-hidden text-slate-100">
       <Sidebar
@@ -394,6 +436,7 @@ const App: React.FC = () => {
             Connection Lost
           </div>
         )}
+
         {view === "chat" && (
           <ChatWindow
             messages={messages}
@@ -409,6 +452,16 @@ const App: React.FC = () => {
             unreadCounts={unreadCounts}
           />
         )}
+
+        {view === "rooms" && (
+          <RoomList
+            rooms={rooms}
+            currentUser={currentUser}
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
+          />
+        )}
+
         {currentUser.role === "admin" && (
           <>
             {view === "monitoring" && <Dashboard metrics={metrics} />}
