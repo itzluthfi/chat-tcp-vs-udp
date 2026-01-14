@@ -19,8 +19,13 @@ import Register from "./components/Register";
 import RoomList from "./components/RoomList";
 import VideoRoom from "./components/VideoRoom";
 
-const API_URL = "http://localhost:3000/api";
-const SOCKET_URL = "http://localhost:3000";
+// --- PERBAIKAN: Import dari Config, Hapus Deklarasi Lokal ---
+import { API_URL, SOCKET_URL } from "./config";
+
+// --- BAGIAN INI DIHAPUS AGAR TIDAK KONFLIK ---
+// const LAPTOP_IP = "192.168.14.75";
+// const API_URL = `http://${LAPTOP_IP}:3000/api`;
+// const SOCKET_URL = `http://${LAPTOP_IP}:3000`;
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -240,12 +245,6 @@ const App: React.FC = () => {
       addLog("WS", "room_created", 200, `New room: ${newRoom.name}`);
     });
 
-    // Jika room dihapus oleh creator
-    // socket.on("room_destroyed", () => {
-    //   // Logika force close ada di VideoRoom, tapi disini kita bisa update list
-    //   // Sebenarnya idealnya fetch ulang list room atau filter out
-    // });
-
     socket.on("room_closed", (closedRoomId: string) => {
       setRooms((prev) => prev.filter((r) => r.id !== closedRoomId));
       addLog("WS", "room_closed", 200, `Room removed: ${closedRoomId}`);
@@ -274,7 +273,28 @@ const App: React.FC = () => {
         setUsers(data.users || []);
         setMessages(data.messages || []);
         setFriendships(data.friendships || []);
-        setRooms(data.rooms || []); // Load Rooms
+
+        const fetchedRooms = data.rooms || [];
+        setRooms(fetchedRooms);
+
+        const savedRoomId = localStorage.getItem("nexus_active_room");
+
+        if (savedRoomId) {
+          // Cek: Apakah room yang disimpan masih ada di database?
+          const roomStillExists = fetchedRooms.find(
+            (r: Room) => r.id === savedRoomId
+          );
+
+          if (roomStillExists) {
+            console.log("🔄 Restoring connection to room:", savedRoomId);
+            setActiveRoomId(savedRoomId); // Otomatis masuk lagi
+          } else {
+            // Room sudah dihapus/berakhir saat kita refresh -> Bersihkan storage
+            console.warn("⚠️ Saved room no longer exists.");
+            localStorage.removeItem("nexus_active_room");
+          }
+        }
+
         addLog("GET", "/api/init", 200, "Synced.");
       } catch (err) {
         setIsOnline(false);
@@ -359,6 +379,9 @@ const App: React.FC = () => {
   };
 
   const handleJoinRoom = (roomId: string) => {
+    // 1. Simpan ke Storage agar tahan refresh
+    localStorage.setItem("nexus_active_room", roomId);
+    // 2. Set State
     setActiveRoomId(roomId);
   };
 
@@ -394,10 +417,14 @@ const App: React.FC = () => {
   if (activeRoomId && socketRef.current && currentRoomData) {
     return (
       <VideoRoom
-        activeRoom={currentRoomData} // PASS OBJECT ROOM
+        activeRoom={currentRoomData}
         currentUser={currentUser}
         socket={socketRef.current}
-        onLeave={() => setActiveRoomId(null)}
+        onLeave={() => {
+          // Hapus dari storage saat sengaja keluar
+          localStorage.removeItem("nexus_active_room");
+          setActiveRoomId(null);
+        }}
       />
     );
   }

@@ -401,20 +401,53 @@ io.on("connection", (socket) => {
   });
 
   // === FITUR ROOM (TCP) ===
-  socket.on("join_room", (roomId) => {
+  socket.on("join_room", async (roomId) => {
     socket.join(roomId);
-    console.log(`User ${socket.id} joined room ${roomId}`);
 
-    // PENTING: Beritahu penghuni room lain bahwa ada user baru
-    // Ini memicu client lama untuk mengirim WebRTC Offer
-    socket.to(roomId).emit("user_joined_room", socket.id);
+    // CARI USERNAME DARI DATABASE/MEMORY BERDASARKAN ID
+    // Kita ambil dari map onlineUsers yang sudah kita set saat register_session
+    const userId = onlineUsers.get(socket.id);
+    let username = "Guest";
+
+    if (userId) {
+      const [rows] = await pool.query(
+        "SELECT username FROM users WHERE id = ?",
+        [userId]
+      );
+      if (rows.length > 0) username = rows[0].username;
+    }
+
+    console.log(`User ${username} (${socket.id}) joined room ${roomId}`);
+
+    // KIRIM SOCKET ID + USERNAME KE PENGHUNI LAMA
+    socket.to(roomId).emit("user_joined_room", {
+      socketId: socket.id,
+      username: username,
+    });
+  });
+
+  // HANDLER UNTUK SIGNALING (Update agar username terbawa)
+  socket.on("webrtc_offer", (data) => {
+    // Data: { sdp, roomId, targetSocketId, senderUsername }
+    socket.to(data.roomId).emit("webrtc_offer", {
+      sdp: data.sdp,
+      senderId: socket.id,
+      senderUsername: data.senderUsername, // <--- TERUSKAN USERNAME
+    });
+  });
+
+  socket.on("webrtc_answer", (data) => {
+    io.to(data.targetSocketId).emit("webrtc_answer", {
+      sdp: data.sdp,
+      senderId: socket.id,
+      senderUsername: data.senderUsername, // <--- TERUSKAN USERNAME
+    });
   });
 
   socket.on("leave_room", (roomId) => {
     socket.leave(roomId);
     socket.to(roomId).emit("user_left_room", socket.id);
   });
-
 
   socket.on("close_room", async (roomId) => {
     console.log(`Room ${roomId} closed by creator`);
@@ -465,16 +498,39 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", async () => {
+    // 1. Ambil User ID dari socket yang putus
     const userId = onlineUsers.get(socket.id);
+
+    // 2. Hapus socket ini dari map DULUAN
     if (userId) {
-      await pool.query('UPDATE users SET status = "offline" WHERE id = ?', [
-        userId,
-      ]);
       onlineUsers.delete(socket.id);
-      const [users] = await pool.query(
-        "SELECT id, username, email, role, status FROM users"
-      );
-      io.emit("user_status_update", users);
+
+      // === LOGIKA BARU: MULTI-DEVICE CHECK ===
+      // Cek apakah User ID ini MASIH ADA di socket lain?
+      // Kita cari di Map onlineUsers values
+      const isUserStillOnline = [...onlineUsers.values()].includes(userId);
+
+      if (isUserStillOnline) {
+        console.log(
+          `⚠️ User ${userId} putus satu koneksi, tapi masih online di device lain.`
+        );
+        // JANGAN update DB jadi offline
+        // JANGAN broadcast status update (karena statusnya tidak berubah, tetap online)
+      } else {
+        // Jika benar-benar tidak ada koneksi tersisa, baru set Offline
+        console.log(
+          `🔴 User ${userId} benar-benar offline (semua device putus).`
+        );
+
+        await pool.query('UPDATE users SET status = "offline" WHERE id = ?', [
+          userId,
+        ]);
+
+        const [users] = await pool.query(
+          "SELECT id, username, email, role, status FROM users"
+        );
+        io.emit("user_status_update", users);
+      }
     }
   });
 });

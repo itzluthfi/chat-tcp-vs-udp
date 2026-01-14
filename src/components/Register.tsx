@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { API_URL } from "../config"; // <--- UPDATE 1: Import dari Config
 
 interface RegisterProps {
   onSwitchToLogin: () => void;
@@ -18,7 +19,8 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
     setError("");
 
     try {
-      const response = await fetch("http://localhost:3000/api/auth/register", {
+      // <--- UPDATE 2: Menggunakan API_URL dinamis
+      const response = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, email, password }),
