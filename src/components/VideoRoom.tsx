@@ -9,6 +9,7 @@ interface VideoRoomProps {
   onLeave: () => void;
 }
 
+// KONFIGURASI UDP NYA ADA DI FRONT END
 const RTC_CONFIG = {
   iceServers: [
     {
@@ -29,28 +30,25 @@ const VideoRoom: React.FC<VideoRoomProps> = ({
   const roomId = activeRoom.id;
   const isCreator = activeRoom.creator_id === currentUser.id;
 
-  // STATE
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<{
     [key: string]: MediaStream;
   }>({});
   const [peerNames, setPeerNames] = useState<{ [key: string]: string }>({});
 
-  // UI STATE
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCamOn, setIsCamOn] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
 
-  // REFS
+
   const peerConnections = useRef<{ [key: string]: RTCPeerConnection }>({});
   const localVideoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null); // PENTING: Hardware Reference
+  const streamRef = useRef<MediaStream | null>(null); 
 
-  // === FUNGSI MATIKAN TOTAL ===
   const stopAllTracks = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => {
-        track.stop(); // Perintah mematikan lampu hardware
+        track.stop();
         track.enabled = false;
       });
       streamRef.current = null;

@@ -11,23 +11,22 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       host: true,
-      // --- KONFIGURASI PROXY DI SINI ---
+      
       proxy: {
-        // 1. Proxy untuk API (HTTP Request)
+      
         "/api": {
           target: "http://localhost:3000", // Arahkan ke Backend
           changeOrigin: true,
-          secure: false, // Abaikan validasi SSL karena backend HTTP
+          secure: false,
         },
         // 2. Proxy untuk WebSocket (Penting untuk project Chat/Realtime)
         "/socket.io": {
           target: "http://localhost:3000",
-          ws: true, // Aktifkan dukungan WebSocket
+          ws: true,
           changeOrigin: true,
           secure: false,
         },
-        // Jika kamu tidak pakai socket.io tapi pakai raw WebSocket,
-        // sesuaikan path-nya (misal '/ws')
+        
       },
       // ---------------------------------
     },

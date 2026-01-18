@@ -19,7 +19,6 @@ import Register from "./components/Register";
 import RoomList from "./components/RoomList";
 import VideoRoom from "./components/VideoRoom";
 
-// --- PERBAIKAN: Import dari Config, Hapus Deklarasi Lokal ---
 import { API_URL, SOCKET_URL } from "./config";
 
 // --- BAGIAN INI DIHAPUS AGAR TIDAK KONFLIK ---
@@ -249,7 +248,6 @@ const App: React.FC = () => {
       setRooms((prev) => prev.filter((r) => r.id !== closedRoomId));
       addLog("WS", "room_closed", 200, `Room removed: ${closedRoomId}`);
 
-      // Jaga-jaga jika kita sedang memegang ID room yang baru saja dihapus
       if (activeRoomId === closedRoomId) {
         setActiveRoomId(null);
       }
@@ -262,7 +260,6 @@ const App: React.FC = () => {
     };
   }, [currentUser?.id]);
 
-  // === EFFECT 3: FETCH DATA AWAL ===
   useEffect(() => {
     if (!currentUser) return;
     const initApp = async () => {
@@ -280,7 +277,6 @@ const App: React.FC = () => {
         const savedRoomId = localStorage.getItem("nexus_active_room");
 
         if (savedRoomId) {
-          // Cek: Apakah room yang disimpan masih ada di database?
           const roomStillExists = fetchedRooms.find(
             (r: Room) => r.id === savedRoomId
           );
@@ -303,7 +299,6 @@ const App: React.FC = () => {
     initApp();
   }, [currentUser?.id]);
 
-  // --- HANDLERS UTAMA ---
 
   const handleSendMessage = async (content: string, receiverId?: string) => {
     if (!currentUser) return;
@@ -363,7 +358,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- ROOM HANDLERS ---
 
   const handleCreateRoom = async (name: string) => {
     if (!currentUser) return;
@@ -385,7 +379,6 @@ const App: React.FC = () => {
     setActiveRoomId(roomId);
   };
 
-  // --- RENDER LOGIC ---
 
   if (isCheckingSession) {
     return (
@@ -411,7 +404,6 @@ const App: React.FC = () => {
   }
 
   // --- MODE VIDEO CALL (FULL SCREEN) ---
-  // Cari data room lengkap berdasarkan ID
   const currentRoomData = rooms.find((r) => r.id === activeRoomId);
 
   if (activeRoomId && socketRef.current && currentRoomData) {

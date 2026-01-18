@@ -6,7 +6,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs"); // LIBRARY BARU: Untuk Hashing Password
+const bcrypt = require("bcryptjs");
 
 dotenv.config();
 
@@ -31,10 +31,8 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
-// Map User Online
 const onlineUsers = new Map();
 
-// === MONITORING REALTIME ===
 let throughputCounter = 0;
 
 setInterval(() => {
@@ -64,18 +62,18 @@ const authenticateToken = (req, res, next) => {
 
 // === API ROUTES ===
 
-// 1. REGISTER (BARU: Untuk User Public)
+// 1. REGISTER kan dulu lee
 app.post("/api/auth/register", async (req, res) => {
   const { username, email, password } = req.body;
   try {
-    // Cek email duplikat
+
     const [existing] = await pool.query("SELECT * FROM users WHERE email = ?", [
       email,
     ]);
     if (existing.length > 0)
       return res.status(400).json({ error: "Email already exists" });
 
-    // Hash Password
+    
     const hashedPassword = await bcrypt.hash(password, 10);
     const newId = "u_" + Date.now();
 
@@ -90,7 +88,6 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-// 2. LOGIN (UPDATED: Support Hash & Plain Text Seed)
 app.post("/api/auth/login", async (req, res) => {
   const { email, password, rememberMe } = req.body;
   try {
@@ -102,12 +99,10 @@ app.post("/api/auth/login", async (req, res) => {
       const user = rows[0];
       let isValid = false;
 
-      // Cek: Apakah password di DB sudah ter-hash (panjang > 50)?
       if (user.password.length > 50) {
         // Cek pakai Bcrypt
         isValid = await bcrypt.compare(password, user.password);
       } else {
-        // Fallback: Cek Plain Text (Khusus untuk Akun Seed 'admin')
         isValid = password === user.password;
       }
 
@@ -116,6 +111,7 @@ app.post("/api/auth/login", async (req, res) => {
           user.id,
         ]);
 
+        // IMPLEMENTASI JWT TOKEN MENGGUNAKAN JSONWEBTOKEN
         const token = jwt.sign(
           { id: user.id, role: user.role, username: user.username },
           SECRET_KEY,
@@ -144,19 +140,13 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// ... (Endpoint Refresh, Verify, Logout SAMA SEPERTI SEBELUMNYA, Copy Paste saja jika mau) ...
-// Agar tidak terlalu panjang, saya asumsikan Anda pakai kode logout/refresh dari file sebelumnya.
-// TAPI pastikan endpoint /api/init di bawah ini di-update:
 
-// 3. INIT DATA (UPDATED: Fetch Rooms juga)
 app.get("/api/init", async (req, res) => {
   try {
     const [users] = await pool.query(
       "SELECT id, username, email, role, status FROM users"
     );
 
-    // Ambil Pesan (Global Only atau User related)
-    // Disini kita ambil pesan global dulu untuk init
     const [messages] = await pool.query(`
       SELECT m.*, u.username AS senderName, m.sender_id AS senderId, m.receiver_id AS receiverId, m.room_id AS roomId
       FROM messages m
@@ -166,7 +156,6 @@ app.get("/api/init", async (req, res) => {
 
     const [friendships] = await pool.query("SELECT * FROM friendships");
 
-    // Fetch Rooms Aktif
     const [rooms] = await pool.query("SELECT * FROM rooms WHERE is_active = 1");
 
     res.json({ users, messages, friendships, rooms });
@@ -175,7 +164,6 @@ app.get("/api/init", async (req, res) => {
   }
 });
 
-// 4. ROOMS API (BARU)
 app.post("/api/rooms/create", async (req, res) => {
   const { name, creatorId } = req.body;
   const roomId = "room_" + Date.now();
@@ -184,10 +172,8 @@ app.post("/api/rooms/create", async (req, res) => {
       "INSERT INTO rooms (id, name, creator_id) VALUES (?, ?, ?)",
       [roomId, name, creatorId]
     );
-    // Kembalikan data room baru
     const newRoom = { id: roomId, name, creator_id: creatorId, is_active: 1 };
 
-    // Broadcast ke semua user bahwa ada room baru
     io.emit("room_created", newRoom);
 
     res.json(newRoom);
@@ -197,7 +183,7 @@ app.post("/api/rooms/create", async (req, res) => {
 });
 
 
-// 1. VERIFY TOKEN (Wajib untuk Auto Login saat Refresh)
+// 1. VERIFY TOKEN 
 app.get("/api/auth/verify", authenticateToken, async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [
@@ -215,7 +201,6 @@ app.get("/api/auth/verify", authenticateToken, async (req, res) => {
   }
 });
 
-// 2. REFRESH TOKEN (Untuk Remember Me)
 app.post("/api/auth/refresh", async (req, res) => {
   const { rememberToken } = req.body;
   if (!rememberToken)
@@ -249,7 +234,7 @@ app.post("/api/auth/refresh", async (req, res) => {
   }
 });
 
-// 3. LOGOUT (Untuk Hapus Sesi)
+
 app.post("/api/auth/logout", async (req, res) => {
   const { rememberToken, userId } = req.body;
   try {
@@ -264,7 +249,7 @@ app.post("/api/auth/logout", async (req, res) => {
         userId,
       ]);
       
-      // Hapus dari map onlineUsers (Cari key berdasarkan value userId)
+      
       for (const [socketId, uid] of onlineUsers.entries()) {
         if (uid === userId) {
             onlineUsers.delete(socketId);
@@ -283,7 +268,7 @@ app.post("/api/auth/logout", async (req, res) => {
   }
 });
 
-// 4. FRIENDSHIP ACTION (Juga Hilang di kode Anda)
+// 4. FRIENDSHIP ACTION
 app.post("/api/friendships/action", async (req, res) => {
   const { senderId, receiverId, action } = req.body;
   try {
@@ -313,7 +298,6 @@ app.post("/api/friendships/action", async (req, res) => {
 });
 
 
-// 5. SEND MESSAGE (UPDATED: Support Room ID)
 app.post("/api/messages/send", async (req, res) => {
   const {
     id,
@@ -326,7 +310,6 @@ app.post("/api/messages/send", async (req, res) => {
     type,
   } = req.body;
 
-  // Logika Penentuan Tujuan
   const finalReceiverId = receiverId || null;
   const finalRoomId = roomId || null;
 
@@ -361,15 +344,13 @@ app.post("/api/messages/send", async (req, res) => {
 
     // LOGIKA BROADCAST PENTING:
     if (finalRoomId) {
-      // Kirim ke Room Spesifik
+  
       io.to(finalRoomId).emit("receive_message", messageData);
     } else if (finalReceiverId) {
-      // Kirim Private (ke Socket penerima)
-      // Kita butuh cari socketId dari receiverId (Pakai Map onlineUsers terbalik atau broadcast global filter di front)
-      // Cara simpel: Broadcast global, frontend filter. (Aman untuk skala kecil)
+    
       io.emit("receive_message", messageData);
     } else {
-      // Global Chat
+    
       io.emit("receive_message", messageData);
     }
 
@@ -379,8 +360,6 @@ app.post("/api/messages/send", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// ... (Friendship API sama seperti sebelumnya) ...
 
 // === SOCKET.IO HANDLERS (TCP + HYBRID SIGNALING) ===
 io.on("connection", (socket) => {
@@ -400,12 +379,9 @@ io.on("connection", (socket) => {
     io.emit("user_status_update", users);
   });
 
-  // === FITUR ROOM (TCP) ===
   socket.on("join_room", async (roomId) => {
     socket.join(roomId);
 
-    // CARI USERNAME DARI DATABASE/MEMORY BERDASARKAN ID
-    // Kita ambil dari map onlineUsers yang sudah kita set saat register_session
     const userId = onlineUsers.get(socket.id);
     let username = "Guest";
 
@@ -419,28 +395,28 @@ io.on("connection", (socket) => {
 
     console.log(`User ${username} (${socket.id}) joined room ${roomId}`);
 
-    // KIRIM SOCKET ID + USERNAME KE PENGHUNI LAMA
+
     socket.to(roomId).emit("user_joined_room", {
       socketId: socket.id,
       username: username,
     });
   });
 
-  // HANDLER UNTUK SIGNALING (Update agar username terbawa)
+  // ================ IMPELEMNTASI TCP ==============
   socket.on("webrtc_offer", (data) => {
-    // Data: { sdp, roomId, targetSocketId, senderUsername }
     socket.to(data.roomId).emit("webrtc_offer", {
       sdp: data.sdp,
       senderId: socket.id,
-      senderUsername: data.senderUsername, // <--- TERUSKAN USERNAME
+      senderUsername: data.senderUsername,
     });
   });
 
+  // MENJAWAB DARI VODEO CALL NYA
   socket.on("webrtc_answer", (data) => {
     io.to(data.targetSocketId).emit("webrtc_answer", {
       sdp: data.sdp,
       senderId: socket.id,
-      senderUsername: data.senderUsername, // <--- TERUSKAN USERNAME
+      senderUsername: data.senderUsername,
     });
   });
 
@@ -453,14 +429,14 @@ io.on("connection", (socket) => {
     console.log(`Room ${roomId} closed by creator`);
 
     try {
-      // 1. Update DB
+      
       await pool.query("UPDATE rooms SET is_active = 0 WHERE id = ?", [roomId]);
 
-      // 2. Tendang peserta DI DALAM room
+      
       io.to(roomId).emit("room_destroyed");
       io.in(roomId).socketsLeave(roomId);
 
-      // 3. (BARU) Beritahu SEMUA ORANG di Lobby untuk hapus room dari list
+      
       io.emit("room_closed", roomId);
     } catch (err) {
       console.error(err);
@@ -468,17 +444,15 @@ io.on("connection", (socket) => {
   });
 
   // === FITUR WEBRTC SIGNALING (Hybrid UDP Bridge) ===
-  // Server hanya meneruskan pesan, tidak menyimpannya
   socket.on("webrtc_offer", (data) => {
     // Data mengandung: sdp, roomId
     socket.to(data.roomId).emit("webrtc_offer", {
       sdp: data.sdp,
-      senderId: socket.id, // Supaya penerima tahu siapa yang kirim
+      senderId: socket.id,
     });
   });
 
   socket.on("webrtc_answer", (data) => {
-    // Data mengandung: sdp, targetSocketId
     io.to(data.targetSocketId).emit("webrtc_answer", {
       sdp: data.sdp,
       senderId: socket.id,
@@ -501,21 +475,16 @@ io.on("connection", (socket) => {
     // 1. Ambil User ID dari socket yang putus
     const userId = onlineUsers.get(socket.id);
 
-    // 2. Hapus socket ini dari map DULUAN
     if (userId) {
       onlineUsers.delete(socket.id);
 
-      // === LOGIKA BARU: MULTI-DEVICE CHECK ===
-      // Cek apakah User ID ini MASIH ADA di socket lain?
-      // Kita cari di Map onlineUsers values
       const isUserStillOnline = [...onlineUsers.values()].includes(userId);
 
       if (isUserStillOnline) {
         console.log(
           `⚠️ User ${userId} putus satu koneksi, tapi masih online di device lain.`
         );
-        // JANGAN update DB jadi offline
-        // JANGAN broadcast status update (karena statusnya tidak berubah, tetap online)
+    
       } else {
         // Jika benar-benar tidak ada koneksi tersisa, baru set Offline
         console.log(
