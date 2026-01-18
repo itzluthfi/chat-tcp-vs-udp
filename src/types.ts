@@ -48,14 +48,17 @@ export interface MetricPoint {
   latency: number;
   throughput: number;
   activeUsers: number;
-  wsOverhead: number;
+  wsOverhead?: number;
   tcpOverhead: number;
+  loss?: number;
 }
+
+export type LogMethod = "GET" | "POST" | "PUT" | "DELETE" | "WS";
 
 export interface LogEntry {
   id: string;
   timestamp: string;
-  method: "GET" | "POST" | "PUT" | "DELETE" | "WS" | "AUTH";
+  method: LogMethod;
   path: string;
   status: number | string;
   message: string;

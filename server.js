@@ -31,24 +31,58 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
+// Map User Online
 const onlineUsers = new Map();
 
-let throughputCounter = 0;
+// ==========================================
+// 📊 MONITORING & SIMULASI TCP vs UDP
+// ==========================================
+let tcpMessageCount = 0; 
+let udpVideoParticipants = 0;
 
+// Reset counter pesan setiap 1 detik
 setInterval(() => {
-  throughputCounter = 0;
+  tcpMessageCount = 0;
 }, 1000);
 
+// Broadcast Statistik ke Dashboard Admin (Setiap 1 Detik)
 setInterval(() => {
   const activeSockets = io.engine.clientsCount;
-  io.emit("server_stats", {
-    activeUsers: activeSockets,
-    throughput: throughputCounter,
-    timestamp: Date.now(),
-  });
-}, 2000);
 
-// === AUTH HELPER ===
+  
+  const tcpChatBandwidth = tcpMessageCount * (50 + 60);
+  const udpChatBandwidth = tcpMessageCount * (50 + 28); 
+
+  const udpVideoLatency = 50; 
+  let tcpVideoLatency = 0;
+
+  if (udpVideoParticipants > 0) {
+  
+    tcpVideoLatency = 150 + Math.floor(Math.random() * 300);
+  }
+
+  io.emit("server_stats", {
+    timestamp: Date.now(),
+    activeUsers: activeSockets,
+
+    chat: {
+      count: tcpMessageCount,
+      tcpLoad: tcpChatBandwidth,
+      udpLoad: udpChatBandwidth, 
+    },
+
+    // Data Grafik 2: Kestabilan Latency (Video)
+    video: {
+      users: udpVideoParticipants,
+      udpLatency: udpVideoLatency, // Garis Lurus (Lancar)
+      tcpLatency: tcpVideoLatency, // Garis Naik Turun (Nge-lag)
+    },
+  });
+}, 1000);
+
+// ==========================================
+// AUTH HELPER
+// ==========================================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -60,26 +94,26 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// === API ROUTES ===
+// ==========================================
+// API ROUTES
+// ==========================================
 
-// 1. REGISTER kan dulu lee
+// 1. REGISTER
 app.post("/api/auth/register", async (req, res) => {
   const { username, email, password } = req.body;
   try {
-
     const [existing] = await pool.query("SELECT * FROM users WHERE email = ?", [
       email,
     ]);
     if (existing.length > 0)
       return res.status(400).json({ error: "Email already exists" });
 
-    
     const hashedPassword = await bcrypt.hash(password, 10);
     const newId = "u_" + Date.now();
 
     await pool.query(
       "INSERT INTO users (id, username, email, password, role, status) VALUES (?, ?, ?, ?, 'user', 'offline')",
-      [newId, username, email, hashedPassword]
+      [newId, username, email, hashedPassword],
     );
 
     res.status(201).json({ message: "Registration successful. Please login." });
@@ -88,6 +122,7 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
+// 2. LOGIN
 app.post("/api/auth/login", async (req, res) => {
   const { email, password, rememberMe } = req.body;
   try {
@@ -100,7 +135,6 @@ app.post("/api/auth/login", async (req, res) => {
       let isValid = false;
 
       if (user.password.length > 50) {
-        // Cek pakai Bcrypt
         isValid = await bcrypt.compare(password, user.password);
       } else {
         isValid = password === user.password;
@@ -111,11 +145,11 @@ app.post("/api/auth/login", async (req, res) => {
           user.id,
         ]);
 
-        // IMPLEMENTASI JWT TOKEN MENGGUNAKAN JSONWEBTOKEN
+        // TOKEN JWT
         const token = jwt.sign(
           { id: user.id, role: user.role, username: user.username },
           SECRET_KEY,
-          { expiresIn: "2h" }
+          { expiresIn: "2h" },
         );
 
         let rememberToken = null;
@@ -140,11 +174,11 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-
+// 3. INIT DATA
 app.get("/api/init", async (req, res) => {
   try {
     const [users] = await pool.query(
-      "SELECT id, username, email, role, status FROM users"
+      "SELECT id, username, email, role, status FROM users",
     );
 
     const [messages] = await pool.query(`
@@ -155,7 +189,6 @@ app.get("/api/init", async (req, res) => {
     `);
 
     const [friendships] = await pool.query("SELECT * FROM friendships");
-
     const [rooms] = await pool.query("SELECT * FROM rooms WHERE is_active = 1");
 
     res.json({ users, messages, friendships, rooms });
@@ -164,26 +197,24 @@ app.get("/api/init", async (req, res) => {
   }
 });
 
+// 4. CREATE ROOM
 app.post("/api/rooms/create", async (req, res) => {
   const { name, creatorId } = req.body;
   const roomId = "room_" + Date.now();
   try {
     await pool.query(
       "INSERT INTO rooms (id, name, creator_id) VALUES (?, ?, ?)",
-      [roomId, name, creatorId]
+      [roomId, name, creatorId],
     );
     const newRoom = { id: roomId, name, creator_id: creatorId, is_active: 1 };
-
     io.emit("room_created", newRoom);
-
     res.json(newRoom);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-
-// 1. VERIFY TOKEN 
+// 5. VERIFY & REFRESH
 app.get("/api/auth/verify", authenticateToken, async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [
@@ -209,21 +240,18 @@ app.post("/api/auth/refresh", async (req, res) => {
   try {
     const [rows] = await pool.query(
       "SELECT * FROM users WHERE remember_token = ?",
-      [rememberToken]
+      [rememberToken],
     );
     if (rows.length > 0) {
       const user = rows[0];
-
       await pool.query('UPDATE users SET status = "online" WHERE id = ?', [
         user.id,
       ]);
-
       const token = jwt.sign(
         { id: user.id, role: user.role, username: user.username },
         SECRET_KEY,
-        { expiresIn: "2h" }
+        { expiresIn: "2h" },
       );
-
       const { password: _, remember_token: __, ...userSafe } = user;
       res.json({ token, user: userSafe });
     } else {
@@ -234,31 +262,31 @@ app.post("/api/auth/refresh", async (req, res) => {
   }
 });
 
-
+// 6. LOGOUT
 app.post("/api/auth/logout", async (req, res) => {
   const { rememberToken, userId } = req.body;
   try {
     if (rememberToken) {
       await pool.query(
         "UPDATE users SET remember_token = NULL WHERE remember_token = ?",
-        [rememberToken]
+        [rememberToken],
       );
     }
     if (userId) {
       await pool.query('UPDATE users SET status = "offline" WHERE id = ?', [
         userId,
       ]);
-      
-      
+
+      // Hapus dari map onlineUsers
       for (const [socketId, uid] of onlineUsers.entries()) {
         if (uid === userId) {
-            onlineUsers.delete(socketId);
-            break;
+          onlineUsers.delete(socketId);
+          break;
         }
       }
 
       const [users] = await pool.query(
-        "SELECT id, username, email, role, status FROM users"
+        "SELECT id, username, email, role, status FROM users",
       );
       io.emit("user_status_update", users);
     }
@@ -268,7 +296,7 @@ app.post("/api/auth/logout", async (req, res) => {
   }
 });
 
-// 4. FRIENDSHIP ACTION
+// 7. FRIENDSHIP
 app.post("/api/friendships/action", async (req, res) => {
   const { senderId, receiverId, action } = req.body;
   try {
@@ -276,7 +304,7 @@ app.post("/api/friendships/action", async (req, res) => {
       const id = "f" + Date.now();
       await pool.query(
         "INSERT INTO friendships (id, sender_id, receiver_id, status) VALUES (?, ?, ?, ?)",
-        [id, senderId, receiverId, "pending"]
+        [id, senderId, receiverId, "pending"],
       );
       io.emit("friend_request", {
         id,
@@ -287,7 +315,7 @@ app.post("/api/friendships/action", async (req, res) => {
     } else if (action === "accept") {
       await pool.query(
         'UPDATE friendships SET status = "accepted" WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)',
-        [senderId, receiverId, receiverId, senderId]
+        [senderId, receiverId, receiverId, senderId],
       );
       io.emit("friend_accepted", { senderId, receiverId });
     }
@@ -297,7 +325,7 @@ app.post("/api/friendships/action", async (req, res) => {
   }
 });
 
-
+// 8. SEND MESSAGE (SENSOR TCP DIPASANG DISINI)
 app.post("/api/messages/send", async (req, res) => {
   const {
     id,
@@ -313,7 +341,8 @@ app.post("/api/messages/send", async (req, res) => {
   const finalReceiverId = receiverId || null;
   const finalRoomId = roomId || null;
 
-  throughputCounter++;
+  // 📡 SENSOR TCP: Setiap pesan yang dikirim dihitung sebagai beban TCP
+  tcpMessageCount++;
 
   try {
     await pool.query(
@@ -327,7 +356,7 @@ app.post("/api/messages/send", async (req, res) => {
         timestamp,
         type,
         "sent",
-      ]
+      ],
     );
 
     const messageData = {
@@ -342,15 +371,11 @@ app.post("/api/messages/send", async (req, res) => {
       status: "delivered",
     };
 
-    // LOGIKA BROADCAST PENTING:
     if (finalRoomId) {
-  
       io.to(finalRoomId).emit("receive_message", messageData);
     } else if (finalReceiverId) {
-    
       io.emit("receive_message", messageData);
     } else {
-    
       io.emit("receive_message", messageData);
     }
 
@@ -361,7 +386,9 @@ app.post("/api/messages/send", async (req, res) => {
   }
 });
 
-// === SOCKET.IO HANDLERS (TCP + HYBRID SIGNALING) ===
+// ==========================================
+// SOCKET.IO HANDLERS
+// ==========================================
 io.on("connection", (socket) => {
   console.log("User Connected:", socket.id);
 
@@ -372,15 +399,16 @@ io.on("connection", (socket) => {
       userId,
     ]);
     const [users] = await pool.query(
-      "SELECT id, username, email, role, status FROM users"
+      "SELECT id, username, email, role, status FROM users",
     );
-
-    console.log("📡 BROADCASTING STATUS UPDATE:", users.length, "users");
     io.emit("user_status_update", users);
   });
 
+  // === FITUR ROOM (SENSOR UDP DIPASANG DISINI) ===
   socket.on("join_room", async (roomId) => {
     socket.join(roomId);
+
+    udpVideoParticipants++;
 
     const userId = onlineUsers.get(socket.id);
     let username = "Guest";
@@ -388,13 +416,12 @@ io.on("connection", (socket) => {
     if (userId) {
       const [rows] = await pool.query(
         "SELECT username FROM users WHERE id = ?",
-        [userId]
+        [userId],
       );
       if (rows.length > 0) username = rows[0].username;
     }
 
     console.log(`User ${username} (${socket.id}) joined room ${roomId}`);
-
 
     socket.to(roomId).emit("user_joined_room", {
       socketId: socket.id,
@@ -402,53 +429,39 @@ io.on("connection", (socket) => {
     });
   });
 
-  // ================ IMPELEMNTASI TCP ==============
-  socket.on("webrtc_offer", (data) => {
-    socket.to(data.roomId).emit("webrtc_offer", {
-      sdp: data.sdp,
-      senderId: socket.id,
-      senderUsername: data.senderUsername,
-    });
-  });
-
-  // MENJAWAB DARI VODEO CALL NYA
-  socket.on("webrtc_answer", (data) => {
-    io.to(data.targetSocketId).emit("webrtc_answer", {
-      sdp: data.sdp,
-      senderId: socket.id,
-      senderUsername: data.senderUsername,
-    });
-  });
-
   socket.on("leave_room", (roomId) => {
     socket.leave(roomId);
+
+    // 📡 SENSOR UDP STOP: User keluar room = beban video berkurang
+    if (udpVideoParticipants > 0) udpVideoParticipants--;
+
     socket.to(roomId).emit("user_left_room", socket.id);
   });
 
   socket.on("close_room", async (roomId) => {
     console.log(`Room ${roomId} closed by creator`);
-
     try {
-      
       await pool.query("UPDATE rooms SET is_active = 0 WHERE id = ?", [roomId]);
 
-      
       io.to(roomId).emit("room_destroyed");
       io.in(roomId).socketsLeave(roomId);
 
-      
+    
+      udpVideoParticipants = 0;
+
       io.emit("room_closed", roomId);
     } catch (err) {
       console.error(err);
     }
   });
 
-  // === FITUR WEBRTC SIGNALING (Hybrid UDP Bridge) ===
+  // === FITUR WEBRTC SIGNALING ===
+
   socket.on("webrtc_offer", (data) => {
-    // Data mengandung: sdp, roomId
     socket.to(data.roomId).emit("webrtc_offer", {
       sdp: data.sdp,
       senderId: socket.id,
+      senderUsername: data.senderUsername, // Username aman disini
     });
   });
 
@@ -456,11 +469,11 @@ io.on("connection", (socket) => {
     io.to(data.targetSocketId).emit("webrtc_answer", {
       sdp: data.sdp,
       senderId: socket.id,
+      senderUsername: data.senderUsername, // Username aman disini
     });
   });
 
   socket.on("webrtc_ice_candidate", (data) => {
-    // Data mengandung: candidate, roomId
     socket.to(data.roomId).emit("webrtc_ice_candidate", {
       candidate: data.candidate,
       senderId: socket.id,
@@ -471,32 +484,40 @@ io.on("connection", (socket) => {
     socket.emit("pong_check", ts);
   });
 
+  socket.on("toggle_media", (data) => {
+   
+    socket.to(data.roomId).emit("remote_media_update", {
+      senderId: socket.id,
+      isMicOn: data.isMicOn,
+      isCamOn: data.isCamOn,
+    });
+  });
+
+  // === SMART DISCONNECT ===
   socket.on("disconnect", async () => {
-    // 1. Ambil User ID dari socket yang putus
     const userId = onlineUsers.get(socket.id);
+
+    if (udpVideoParticipants > 0) udpVideoParticipants--;
 
     if (userId) {
       onlineUsers.delete(socket.id);
 
+      // Cek apakah user masih login di device lain?
       const isUserStillOnline = [...onlineUsers.values()].includes(userId);
 
       if (isUserStillOnline) {
         console.log(
-          `⚠️ User ${userId} putus satu koneksi, tapi masih online di device lain.`
+          `⚠️ User ${userId} putus satu koneksi, tapi masih online di device lain.`,
         );
-    
       } else {
-        // Jika benar-benar tidak ada koneksi tersisa, baru set Offline
         console.log(
-          `🔴 User ${userId} benar-benar offline (semua device putus).`
+          `🔴 User ${userId} benar-benar offline (semua device putus).`,
         );
-
         await pool.query('UPDATE users SET status = "offline" WHERE id = ?', [
           userId,
         ]);
-
         const [users] = await pool.query(
-          "SELECT id, username, email, role, status FROM users"
+          "SELECT id, username, email, role, status FROM users",
         );
         io.emit("user_status_update", users);
       }

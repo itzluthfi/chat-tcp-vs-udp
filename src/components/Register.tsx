@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { API_URL } from "../config"; // <--- UPDATE 1: Import dari Config
+import { API_URL } from "../config";
 
 interface RegisterProps {
   onSwitchToLogin: () => void;
@@ -19,7 +19,6 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
     setError("");
 
     try {
-      // <--- UPDATE 2: Menggunakan API_URL dinamis
       const response = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -34,7 +33,7 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
 
       setSuccess(true);
       setTimeout(() => {
-        onSwitchToLogin(); // Otomatis pindah ke login setelah 2 detik
+        onSwitchToLogin();
       }, 2000);
     } catch (err: any) {
       setError(err.message);
@@ -45,12 +44,18 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-8">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-white tracking-tight">
+      {/* RESPONSIVE NOTE:
+         - w-full: Full width di HP
+         - max-w-md: Stop melebar di 448px (Laptop)
+      */}
+      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 md:p-8">
+        <div className="text-center mb-6 md:mb-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
             Create Account
           </h2>
-          <p className="text-slate-500 mt-2">Join Nexus Network today</p>
+          <p className="text-slate-500 mt-2 text-sm md:text-base">
+            Join Nexus Network today
+          </p>
         </div>
 
         {success ? (
@@ -62,7 +67,7 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             </p>
           </div>
         ) : (
-          <form onSubmit={handleRegister} className="space-y-5">
+          <form onSubmit={handleRegister} className="space-y-4 md:space-y-5">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1 mb-2 block">
                 Username
@@ -112,7 +117,7 @@ const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 active:scale-95"
+              className="w-full py-3 md:py-4 bg-indigo-600 text-white rounded-2xl font-bold transition-all shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 active:scale-95"
             >
               {isLoading ? "Creating Account..." : "Register"}
             </button>

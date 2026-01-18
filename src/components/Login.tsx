@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { User } from "../types";
-import { API_URL } from "../config"; // <--- UPDATE 1: Import dari Config
+import { API_URL } from "../config";
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -22,7 +22,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
     setError("");
 
     try {
-      // <--- UPDATE 2: Menggunakan API_URL dari config (ikut .env)
       const response = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,19 +66,19 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
             showDemoPanel ? "rounded-r-none border-r-0" : ""
           }`}
         >
-          <div className="text-center mb-10">
-            <div className="w-20 h-20 bg-indigo-600 rounded-3xl mx-auto flex items-center justify-center shadow-2xl shadow-indigo-600/40 mb-6 group">
-              <i className="fas fa-comment-alt text-white text-4xl group-hover:scale-110 transition-transform"></i>
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 md:w-20 md:h-20 bg-indigo-600 rounded-3xl mx-auto flex items-center justify-center shadow-2xl shadow-indigo-600/40 mb-6 group">
+              <i className="fas fa-comment-alt text-white text-3xl md:text-4xl group-hover:scale-110 transition-transform"></i>
             </div>
-            <h2 className="text-3xl font-bold text-white tracking-tight">
-              Nexus Secure Login
+            <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+              Nexus Login
             </h2>
-            <p className="text-slate-500 mt-2 font-medium">
-              Protected by JWT & SHA-256
+            <p className="text-slate-500 mt-2 font-medium text-sm md:text-base">
+              Secure Realtime Communication
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4 md:space-y-5">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1 mb-2 block">
                 Email Address
@@ -90,7 +89,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@nexus.io"
-                className="w-full bg-slate-800 border border-slate-700 rounded-2xl py-4 px-5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600/50 transition-all text-sm"
+                className="w-full bg-slate-800 border border-slate-700 rounded-2xl py-3 md:py-4 px-5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600/50 transition-all text-sm"
               />
             </div>
 
@@ -104,7 +103,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••"
-                className="w-full bg-slate-800 border border-slate-700 rounded-2xl py-4 px-5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600/50 transition-all text-sm"
+                className="w-full bg-slate-800 border border-slate-700 rounded-2xl py-3 md:py-4 px-5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600/50 transition-all text-sm"
               />
             </div>
 
@@ -135,7 +134,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 active:scale-95"
+              className="w-full py-3 md:py-4 bg-indigo-600 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 active:scale-95"
             >
               {isLoading ? (
                 <i className="fas fa-spinner fa-spin"></i>
@@ -146,7 +145,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
             </button>
           </form>
 
-          {/* --- TOMBOL REGISTER --- */}
           <div className="text-center mt-6">
             <p className="text-slate-500 text-sm">New to Nexus?</p>
             <button
@@ -157,9 +155,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
             </button>
           </div>
 
+          {/* HANYA MUNCUL DI DESKTOP (md:flex) */}
           <button
             onClick={() => setShowDemoPanel(!showDemoPanel)}
-            className={`mt-8 w-full py-3 rounded-xl border transition-all flex items-center justify-center gap-2 text-xs font-black uppercase tracking-[0.2em] ${
+            className={`hidden md:flex mt-8 w-full py-3 rounded-xl border transition-all items-center justify-center gap-2 text-xs font-black uppercase tracking-[0.2em] ${
               showDemoPanel
                 ? "bg-slate-800 border-slate-700 text-indigo-400"
                 : "bg-transparent border-slate-800 text-slate-500 hover:text-slate-300 hover:border-slate-700"
@@ -168,12 +167,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
             <i
               className={`fas ${showDemoPanel ? "fa-chevron-left" : "fa-bolt"}`}
             ></i>
-            {showDemoPanel ? "Hide Demo Access" : "Demo Accounts Quick Access"}
+            {showDemoPanel ? "Hide Demo Access" : "Demo Accounts"}
           </button>
         </div>
 
+        {/* DEMO PANEL (DESKTOP ONLY) */}
         <div
-          className={`overflow-hidden transition-all duration-500 ease-in-out bg-slate-900/50 border border-slate-800 border-l-0 rounded-r-3xl backdrop-blur-sm ${
+          className={`hidden md:block overflow-hidden transition-all duration-500 ease-in-out bg-slate-900/50 border border-slate-800 border-l-0 rounded-r-3xl backdrop-blur-sm ${
             showDemoPanel
               ? "w-80 opacity-100 p-8"
               : "w-0 opacity-0 p-0 pointer-events-none"
@@ -209,15 +209,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
                 <p className="text-xs font-bold text-slate-300">Alex</p>
                 <p className="text-[9px] text-slate-500 font-mono">
                   alex@nexus.io / user
-                </p>
-              </div>
-              <div
-                onClick={() => fillCredentials("sarah@nexus.io", "user")}
-                className="bg-slate-800/40 p-3 rounded-xl border border-slate-700/50 hover:bg-slate-800 transition-all cursor-pointer group"
-              >
-                <p className="text-xs font-bold text-slate-300">Sarah</p>
-                <p className="text-[9px] text-slate-500 font-mono">
-                  sarah@nexus.io / user
                 </p>
               </div>
             </div>
