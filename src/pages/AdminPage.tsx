@@ -25,25 +25,26 @@ const AdminPage: React.FC<AdminPageProps> = ({ socket, onLogout }) => {
     // === 1. DENGARKAN DATA DARI SERVER (server.js) ===
     socket.on("server_stats", (data) => {
       setMetrics((prev) => {
-        // Konversi data server ke format grafik MetricPoint
         const newPoint: MetricPoint = {
           time: new Date(data.timestamp).toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",
           }),
-          // Mapping Data:
-          latency: data.video.udpLatency, // Mengambil data UDP (Video)
-          throughput: data.chat.count, // Mengambil data TCP (Chat)
-          activeUsers: data.activeUsers,
 
-          // Data Statistik Tambahan (Sesuai types/index.ts)
+          latency:
+            data.video.count > 0 ? data.video.latency : data.chat.latency,
+
+          // Throughput adalah gabungan aktivitas Chat + Video
+          throughput: data.chat.count + (data.video.count > 0 ? 10 : 0),
+
+          activeUsers: data.activeUsers,
           tcpOverhead: 60,
           wsOverhead: 8,
-          loss: 0,
+
+          loss: data.video.loss,
         };
 
-        // Simpan 20 data terakhir agar grafik bergerak mulus
         const newHistory = [...prev, newPoint];
         if (newHistory.length > 20) newHistory.shift();
         return newHistory;

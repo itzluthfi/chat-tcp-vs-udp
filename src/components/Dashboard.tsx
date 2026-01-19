@@ -19,12 +19,16 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ metrics }) => {
-  const currentMetric = metrics[metrics.length - 1] || {
-    latency: 0,
-    throughput: 0,
-    activeUsers: 0,
-    tcpOverhead: 60,
-    wsOverhead: 4,
+  // 1. SAFEGUARD: Ambil data terakhir, atau gunakan default object jika kosong
+  // Masalah sebelumnya: Jika metrics ada tapi isinya undefined, aplikasi crash.
+  const lastItem = metrics[metrics.length - 1];
+
+  const currentMetric = {
+    latency: lastItem?.latency ?? 0, // Pakai '?? 0' (Nullish Coalescing)
+    throughput: lastItem?.throughput ?? 0,
+    activeUsers: lastItem?.activeUsers ?? 0,
+    tcpOverhead: lastItem?.tcpOverhead ?? 60,
+    wsOverhead: lastItem?.wsOverhead ?? 8,
   };
 
   const protocolComparison = [
@@ -43,13 +47,13 @@ const Dashboard: React.FC<DashboardProps> = ({ metrics }) => {
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-900 p-8 space-y-8">
+    <div className="flex-1 overflow-y-auto bg-slate-900 p-4 md:p-8 space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">
+          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
             System Performance
           </h2>
-          <p className="text-slate-400 font-medium">
+          <p className="text-slate-400 font-medium text-sm md:text-base">
             Real-time metrics from Central Cluster #01-SEA
           </p>
         </div>
@@ -64,11 +68,12 @@ const Dashboard: React.FC<DashboardProps> = ({ metrics }) => {
       </div>
 
       {/* Key Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {[
           {
             label: "Network Latency",
-            value: `${currentMetric.latency.toFixed(1)}ms`,
+            // SAFEGUARD: Pastikan toFixed dipanggil pada number
+            value: `${(currentMetric.latency || 0).toFixed(1)}ms`,
             icon: "fa-bolt",
             color: "text-indigo-400",
             bg: "bg-indigo-500/10",
@@ -82,7 +87,8 @@ const Dashboard: React.FC<DashboardProps> = ({ metrics }) => {
           },
           {
             label: "Data Throughput",
-            value: `${currentMetric.throughput.toFixed(1)} req/s`,
+            // SAFEGUARD: Pastikan toFixed dipanggil pada number
+            value: `${(currentMetric.throughput || 0).toFixed(1)} req/s`,
             icon: "fa-tachometer-alt",
             color: "text-emerald-400",
             bg: "bg-emerald-500/10",
@@ -176,7 +182,7 @@ const Dashboard: React.FC<DashboardProps> = ({ metrics }) => {
           </div>
         </div>
 
-        {/* Protocol Efficiency Comparison (NEW) */}
+        {/* Protocol Efficiency Comparison */}
         <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl flex flex-col">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-lg font-bold text-white">Protocol Overhead</h3>

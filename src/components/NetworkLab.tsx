@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -17,27 +15,34 @@ interface NetworkLabProps {
 }
 
 const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
-  const [protocol, setProtocol] = useState<"TCP" | "UDP">("TCP");
+  const [protocol, setProtocol] = useState<"TCP" | "UDP">("UDP");
 
+  // === PERBAIKAN DI SINI (SANITASI DATA) ===
   const adjustedMetrics = metrics.map((m) => {
+    // Pastikan nilai dasar ada, jika undefined ganti 0
+    const rawLatency = m.latency ?? 0;
+    const rawLoss = m.loss ?? 0;
+
     if (protocol === "UDP") {
       return {
         ...m,
-        latency: m.latency * 0.4,
-        overhead: 8 + Math.random() * 4,
-        loss: Math.random() > 0.85 ? 20 : 0,
+        latency: rawLatency, // Gunakan nilai yang sudah diamankan
+        overhead: 9,
+        loss: rawLoss,
       };
     } else {
       return {
         ...m,
-        latency: m.latency + 25,
+        // Visual Hack untuk TCP: Tambah 40ms jika ada aktivitas, tapi pastikan tidak NaN
+        latency: rawLatency > 0 ? rawLatency + 40 : 10,
         overhead: 60,
         loss: 0,
       };
     }
   });
 
-  const currentStatus = adjustedMetrics[adjustedMetrics.length - 1] || {
+  // Ambil data terakhir, atau gunakan object default AMAN jika array kosong
+  const currentStatus = adjustedMetrics[adjustedMetrics.length - 1] ?? {
     latency: 0,
     overhead: 0,
     loss: 0,
@@ -65,7 +70,7 @@ const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
                 : "text-slate-500 hover:text-slate-300"
             }`}
           >
-            TCP (Reliable)
+            TCP (Chat)
           </button>
           <button
             onClick={() => setProtocol("UDP")}
@@ -75,7 +80,7 @@ const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
                 : "text-slate-500 hover:text-slate-300"
             }`}
           >
-            UDP (Fast)
+            UDP (streaming)
           </button>
         </div>
       </div>
@@ -84,6 +89,7 @@ const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* CARD 1: LATENCY */}
             <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">
                 Live Latency
@@ -93,7 +99,8 @@ const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
                   protocol === "UDP" ? "text-emerald-400" : "text-indigo-400"
                 }`}
               >
-                {currentStatus.latency.toFixed(1)}ms
+                {/* SAFEGUARD: Tambahkan || 0 di sini juga untuk keamanan ganda */}
+                {(currentStatus.latency || 0).toFixed(1)}ms
               </p>
               <p className="text-[10px] text-slate-500 mt-2 italic">
                 {protocol === "TCP"
@@ -101,12 +108,14 @@ const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
                   : "Direct datagram stream"}
               </p>
             </div>
+
+            {/* CARD 2: OVERHEAD */}
             <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">
                 Header Overhead
               </p>
               <p className="text-3xl font-black text-white">
-                {currentStatus.overhead.toFixed(0)}{" "}
+                {(currentStatus.overhead || 0).toFixed(0)}{" "}
                 <span className="text-sm font-medium text-slate-500">
                   Bytes
                 </span>
@@ -117,6 +126,8 @@ const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
                   : "Minimal Frame Headers"}
               </p>
             </div>
+
+            {/* CARD 3: INTEGRITY */}
             <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">
                 Data Integrity
@@ -219,8 +230,7 @@ const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
             </div>
           </div>
 
-          {/* Expert Tip for Presentation */}
-          <div className="p-6 bg-emerald-500/5 border border-emerald-500/20 rounded-3xl">
+          {/* <div className="p-6 bg-emerald-500/5 border border-emerald-500/20 rounded-3xl">
             <div className="flex gap-4">
               <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-600/20">
                 <i className="fas fa-graduation-cap text-white text-xl"></i>
@@ -239,7 +249,7 @@ const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
                 </p>
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Live Packet Breakdown */}
