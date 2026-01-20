@@ -71,7 +71,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   unreadCounts,
 }) => {
   const [input, setInput] = useState("");
-  // STATE BARU: Untuk toggle sidebar user di mobile
   const [showMobileUsers, setShowMobileUsers] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -115,7 +114,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     .filter((f) => f.status === "accepted")
     .map((f) => (f.senderId === currentUser.id ? f.receiverId : f.senderId));
 
-  // Fungsi Helper untuk menutup sidebar mobile saat memilih user
   const handleUserSelect = (userId: string) => {
     setActiveTab(userId);
     setShowMobileUsers(false);

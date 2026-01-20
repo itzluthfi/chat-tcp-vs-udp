@@ -28,7 +28,6 @@ export interface Message {
   status: "sent" | "delivered";
 }
 
-// BARU: Interface untuk Room
 export interface Room {
   id: string;
   name: string;
@@ -64,4 +63,4 @@ export interface LogEntry {
   message: string;
 }
 
-export type ViewType = "chat" | "monitoring" | "lab" | "logs" | "rooms"; // Tambah 'rooms'
+export type ViewType = "chat" | "monitoring" | "lab" | "logs" | "rooms";

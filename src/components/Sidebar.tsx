@@ -32,7 +32,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       label: "Monitor",
       show: isAdmin,
     },
-    { id: "lab", icon: "fa-flask", label: "Net Lab", show: isAdmin },
+    { id: "lab", icon: "fa-flask", label: "Testing", show: isAdmin },
     { id: "logs", icon: "fa-terminal", label: "Logs", show: isAdmin },
   ];
 

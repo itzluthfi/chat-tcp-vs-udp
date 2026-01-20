@@ -27,7 +27,6 @@ const RoomList: React.FC<RoomListProps> = ({
   };
 
   return (
-    // UPDATE: p-4 untuk HP, p-8 untuk Laptop.
     // pb-24: Memberi ruang di bawah agar tidak tertutup Bottom Nav di HP.
     <div className="flex-1 overflow-y-auto bg-slate-900 p-4 md:p-8 pb-24 md:pb-8 custom-scrollbar">
       {/* Header Section */}
@@ -60,7 +59,6 @@ const RoomList: React.FC<RoomListProps> = ({
             <i className="fas fa-satellite-dish text-indigo-400"></i> Setup New
             Channel
           </h3>
-          {/* UPDATE: flex-col di HP agar input dan button tidak gepeng */}
           <form
             onSubmit={handleCreate}
             className="flex flex-col sm:flex-row gap-3 md:gap-4"

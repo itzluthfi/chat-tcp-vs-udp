@@ -37,47 +37,69 @@ const onlineUsers = new Map();
 // ==========================================
 // 📊 MONITORING & SIMULASI TCP vs UDP
 // ==========================================
-let tcpMessageCount = 0; 
+let tcpMessagesPerSecond = 0;
 let udpVideoParticipants = 0;
 
 // Reset counter pesan setiap 1 detik
 setInterval(() => {
-  tcpMessageCount = 0;
-}, 1000);
-
-// Broadcast Statistik ke Dashboard Admin (Setiap 1 Detik)
-setInterval(() => {
   const activeSockets = io.engine.clientsCount;
 
-  
-  const tcpChatBandwidth = tcpMessageCount * (50 + 60);
-  const udpChatBandwidth = tcpMessageCount * (50 + 28); 
+  // --- A. METRIK TCP (CHAT) ---
+  let tcpLatency = 0;
+  let tcpThroughput = 0;
 
-  const udpVideoLatency = 50; 
-  let tcpVideoLatency = 0;
-
-  if (udpVideoParticipants > 0) {
-  
-    tcpVideoLatency = 150 + Math.floor(Math.random() * 300);
+  if (tcpMessagesPerSecond > 0) {
+    // Semakin banyak pesan, latency TCP naik sedikit (antrian)
+    tcpLatency = 60 + tcpMessagesPerSecond * 2 + Math.random() * 20;
+    tcpThroughput = tcpMessagesPerSecond;
+  } else {
+    tcpLatency = 20;
+    tcpThroughput = 0;
   }
 
+  let udpLatency = 0;
+  let udpThroughput = 0;
+  let udpLoss = 0;
+
+  if (udpVideoParticipants > 0) {
+    // 1. LATENCY (Makin ramai = Makin lambat/tinggi)
+
+    udpLatency = 15 + udpVideoParticipants * 5 + Math.floor(Math.random() * 20);
+
+    // 2. THROUGHPUT (Akumulasi bandwidth semua user)
+    udpThroughput = udpVideoParticipants * 500;
+
+    const congestionFactor = udpVideoParticipants * 0.5;
+    const randomSpike = Math.random() * 2;
+
+    udpLoss = parseFloat((0.1 + congestionFactor + randomSpike).toFixed(1));
+
+    // Cap maksimal loss biar grafik gak jelek banget (max 10%)
+    if (udpLoss > 10) udpLoss = 10;
+  } else {
+    udpLatency = 0;
+    udpThroughput = 0;
+    udpLoss = 0;
+  }
+
+  // Kirim data ke Frontend
   io.emit("server_stats", {
     timestamp: Date.now(),
     activeUsers: activeSockets,
 
     chat: {
-      count: tcpMessageCount,
-      tcpLoad: tcpChatBandwidth,
-      udpLoad: udpChatBandwidth, 
+      count: tcpThroughput,
+      latency: tcpLatency,
     },
 
-    // Data Grafik 2: Kestabilan Latency (Video)
     video: {
-      users: udpVideoParticipants,
-      udpLatency: udpVideoLatency, // Garis Lurus (Lancar)
-      tcpLatency: tcpVideoLatency, // Garis Naik Turun (Nge-lag)
+      count: udpThroughput,
+      latency: udpLatency,
+      loss: udpLoss,
     },
   });
+
+  tcpMessagesPerSecond = 0;
 }, 1000);
 
 // ==========================================
@@ -341,8 +363,7 @@ app.post("/api/messages/send", async (req, res) => {
   const finalReceiverId = receiverId || null;
   const finalRoomId = roomId || null;
 
-  // 📡 SENSOR TCP: Setiap pesan yang dikirim dihitung sebagai beban TCP
-  tcpMessageCount++;
+  tcpMessagesPerSecond++;
 
   try {
     await pool.query(
@@ -432,7 +453,7 @@ io.on("connection", (socket) => {
   socket.on("leave_room", (roomId) => {
     socket.leave(roomId);
 
-    // 📡 SENSOR UDP STOP: User keluar room = beban video berkurang
+    // 📡 SENSOR UDP STOP
     if (udpVideoParticipants > 0) udpVideoParticipants--;
 
     socket.to(roomId).emit("user_left_room", socket.id);
@@ -446,7 +467,6 @@ io.on("connection", (socket) => {
       io.to(roomId).emit("room_destroyed");
       io.in(roomId).socketsLeave(roomId);
 
-    
       udpVideoParticipants = 0;
 
       io.emit("room_closed", roomId);
@@ -461,7 +481,7 @@ io.on("connection", (socket) => {
     socket.to(data.roomId).emit("webrtc_offer", {
       sdp: data.sdp,
       senderId: socket.id,
-      senderUsername: data.senderUsername, // Username aman disini
+      senderUsername: data.senderUsername,
     });
   });
 
@@ -469,14 +489,15 @@ io.on("connection", (socket) => {
     io.to(data.targetSocketId).emit("webrtc_answer", {
       sdp: data.sdp,
       senderId: socket.id,
-      senderUsername: data.senderUsername, // Username aman disini
+      senderUsername: data.senderUsername,
     });
   });
 
   socket.on("webrtc_ice_candidate", (data) => {
     socket.to(data.roomId).emit("webrtc_ice_candidate", {
-      candidate: data.candidate,
+      sdp: data.sdp,
       senderId: socket.id,
+      senderUsername: data.senderUsername,
     });
   });
 
@@ -485,7 +506,6 @@ io.on("connection", (socket) => {
   });
 
   socket.on("toggle_media", (data) => {
-   
     socket.to(data.roomId).emit("remote_media_update", {
       senderId: socket.id,
       isMicOn: data.isMicOn,

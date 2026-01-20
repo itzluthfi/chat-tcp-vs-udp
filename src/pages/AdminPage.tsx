@@ -3,7 +3,6 @@ import { Socket } from "socket.io-client";
 import Dashboard from "../components/Dashboard";
 import NetworkLab from "../components/NetworkLab";
 import KernelLogs from "../components/KernelLogs";
-// UPDATE: Import LogMethod agar tidak error saat passing tipe method
 import { MetricPoint, LogEntry, LogMethod } from "../types";
 
 interface AdminPageProps {
@@ -53,7 +52,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ socket, onLogout }) => {
 
     // === 2. DENGARKAN LOG REALTIME ===
 
-    // UPDATE PENTING: Ubah tipe 'method' menjadi 'LogMethod' agar TypeScript tidak protes
+    // Ubah tipe 'method' menjadi 'LogMethod' agar TypeScript tidak protes
     const handleLog = (
       method: LogMethod,
       path: string,
@@ -62,7 +61,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ socket, onLogout }) => {
     ) => {
       const newLog: LogEntry = {
         id: Math.random().toString(36).substr(2, 9),
-        method, // Sekarang aman karena tipenya sudah cocok
+        method,
         path,
         status,
         message: msg,

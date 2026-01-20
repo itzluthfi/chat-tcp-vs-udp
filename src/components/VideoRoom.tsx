@@ -20,7 +20,6 @@ const RTC_CONFIG = {
     {
       urls: [
         "stun:stun.l.google.com:19302",
-
         "stun:global.stun.twilio.com:3478",
       ],
     },
@@ -294,10 +293,6 @@ const VideoRoom: React.FC<VideoRoomProps> = ({
     if (peerConnections.current[targetSocketId])
       return peerConnections.current[targetSocketId];
 
-    // 2. SAFETY CHECK: Jangan buat koneksi jika stream Hardware belum siap!
-
-    // Ini yang mencegah Host mengirim offer "bisu"
-
     if (!streamRef.current) {
       console.warn("⚠️ Stream belum siap, menunda koneksi ke", targetSocketId);
 
@@ -325,8 +320,6 @@ const VideoRoom: React.FC<VideoRoomProps> = ({
         [targetSocketId]: event.streams[0],
       }));
     };
-
-    // 3. ADD TRACKS (Audio & Video)
 
     streamRef.current.getTracks().forEach((track) => {
       // Log untuk memastikan track audio masuk

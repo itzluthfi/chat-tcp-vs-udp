@@ -17,23 +17,20 @@ interface NetworkLabProps {
 const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
   const [protocol, setProtocol] = useState<"TCP" | "UDP">("UDP");
 
-  // === PERBAIKAN DI SINI (SANITASI DATA) ===
   const adjustedMetrics = metrics.map((m) => {
-    // Pastikan nilai dasar ada, jika undefined ganti 0
     const rawLatency = m.latency ?? 0;
     const rawLoss = m.loss ?? 0;
 
     if (protocol === "UDP") {
       return {
         ...m,
-        latency: rawLatency, // Gunakan nilai yang sudah diamankan
+        latency: rawLatency,
         overhead: 9,
         loss: rawLoss,
       };
     } else {
       return {
         ...m,
-        // Visual Hack untuk TCP: Tambah 40ms jika ada aktivitas, tapi pastikan tidak NaN
         latency: rawLatency > 0 ? rawLatency + 40 : 10,
         overhead: 60,
         loss: 0,
@@ -54,10 +51,10 @@ const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-800/50 p-6 rounded-3xl border border-slate-700/50">
         <div>
           <h2 className="text-3xl font-bold text-white tracking-tight">
-            Experimental Network Lab
+            Network Protocol Testing
           </h2>
           <p className="text-slate-400 font-medium">
-            Protocol Switching & Header Analysis
+            Simulation & Header Analysis
           </p>
         </div>
 
@@ -230,33 +227,78 @@ const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
             </div>
           </div>
 
-          {/* <div className="p-6 bg-emerald-500/5 border border-emerald-500/20 rounded-3xl">
-            <div className="flex gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-600/20">
-                <i className="fas fa-graduation-cap text-white text-xl"></i>
-              </div>
-              <div>
-                <h4 className="font-bold text-white mb-1">
-                  Presentation Tip: TCP vs UDP Realtime?
-                </h4>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  Jangan salah! <strong>Keduanya tetap realtime.</strong>{" "}
-                  Bedanya adalah TCP menjamin pesan chat 100% sampai (Reliable)
-                  meskipun sedikit lebih berat, sementara UDP mengejar kecepatan
-                  murni (Fast) tapi berisiko kehilangan data. Di aplikasi ini,
-                  kita menggunakan WebSocket (TCP) untuk chat agar pesan Anda
-                  tidak pernah hilang di tengah jalan.
-                </p>
+          <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-white uppercase tracking-widest text-xs">
+                Speed Comparison (Delta)
+              </h3>
+              <div className="flex gap-2">
+                {(() => {
+                  let tcpLat, udpLat;
+
+                  if (protocol === "TCP") {
+                    tcpLat = currentStatus.latency;
+                    udpLat = Math.max(5, tcpLat - 40);
+                  } else {
+                    udpLat = currentStatus.latency;
+                    tcpLat = udpLat + 40;
+                  }
+
+                  const rawDiff = tcpLat - udpLat;
+                  const isUdpView = protocol === "UDP";
+                  const label = isUdpView ? "UDP Faster By" : "TCP Slower By";
+                  const diffDisplay = isUdpView
+                    ? `-${rawDiff.toFixed(1)}`
+                    : `+${rawDiff.toFixed(1)}`;
+                  const colorClass = isUdpView
+                    ? "text-emerald-400"
+                    : "text-rose-400";
+
+                  // Speedup factor selalu sama (ratio), tapi label performance boost beda
+                  const ratio = (tcpLat / (udpLat || 1)).toFixed(1);
+                  const performanceLabel = isUdpView
+                    ? "Performance Boost"
+                    : "Latency Penalty";
+                  const performanceValue = isUdpView
+                    ? `${ratio}x Faster`
+                    : `${ratio}x Slower`;
+
+                  return (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex justify-between items-end border-b border-slate-700 pb-4">
+                        <div>
+                          <p className="text-slate-400 text-[10px] uppercase font-bold text-left">
+                            {label}
+                          </p>
+                          <p className={`text-4xl font-black ${colorClass}`}>
+                            {diffDisplay} ms
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-slate-400 text-[10px] uppercase font-bold">
+                            {performanceLabel}
+                          </p>
+                          <p className="text-xl font-bold text-white">
+                            {performanceValue}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-500 italic text-left">
+                        *Calculated based on current active metric.
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
-          </div> */}
+          </div>
         </div>
 
         {/* Live Packet Breakdown */}
         <div className="bg-slate-950 border border-slate-700 rounded-2xl overflow-hidden flex flex-col shadow-2xl">
           <div className="bg-slate-800 px-6 py-4 border-b border-slate-700">
             <h3 className="text-xs font-black text-white uppercase tracking-[0.2em]">
-              Live Packet Inspector
+              Live Packet
             </h3>
           </div>
           <div className="p-6 font-mono text-[11px] flex-1 space-y-4 overflow-y-auto">
@@ -264,8 +306,15 @@ const NetworkLab: React.FC<NetworkLabProps> = ({ metrics }) => {
               <p className="text-indigo-400 font-bold tracking-tight">
                 # PACKET HEADER BREAKDOWN
               </p>
-              <p className="text-slate-500">Source: 192.168.1.104</p>
-              <p className="text-slate-500">Destination: 0.0.0.0 (Global)</p>
+              <p className="text-slate-500">
+                Source: 192.168.1.
+                {metrics.length > 0
+                  ? metrics[0].throughput.toString().slice(-2)
+                  : "10"}
+              </p>
+              <p className="text-slate-500">
+                Destination: 104.21.55.2 (Server)
+              </p>
             </div>
 
             <div className="space-y-2">

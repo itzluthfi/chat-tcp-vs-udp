@@ -41,7 +41,6 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [isOnline, setIsOnline] = useState(false);
 
-  // STATE ADMIN (Sekarang hidup di App.tsx)
   const [metrics, setMetrics] = useState<MetricPoint[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
@@ -69,7 +68,6 @@ const App: React.FC = () => {
     status: number,
     msg: string,
   ) => {
-    // Hanya simpan log jika user adalah admin (untuk hemat memori user biasa)
     if (currentUser?.role !== "admin") return;
 
     const newLog: LogEntry = {
@@ -83,7 +81,6 @@ const App: React.FC = () => {
     setLogs((prev) => [newLog, ...prev].slice(0, 50));
   };
 
-  // === EFFECT: AUTO LOGIN ===
   useEffect(() => {
     const attemptAutoLogin = async () => {
       setIsCheckingSession(true);
@@ -160,7 +157,7 @@ const App: React.FC = () => {
     // === LISTENER MONITORING (HANYA AKTIF JIKA ADMIN) ===
     // Tapi kita pasang saja, kalau bukan admin UI-nya gak muncul kok
     socket.on("server_stats", (data: any) => {
-      if (currentUser.role !== "admin") return; // Hemat resource client user
+      if (currentUser.role !== "admin") return;
 
       setMetrics((prev) => {
         const newPoint: MetricPoint = {
@@ -169,13 +166,18 @@ const App: React.FC = () => {
             minute: "2-digit",
             second: "2-digit",
           }),
-          latency: data.video.udpLatency,
-          throughput: data.chat.count,
+
+          latency:
+            data.video.latency > 0 ? data.video.latency : data.chat.latency,
+
+          throughput: data.chat.count + data.video.count,
           activeUsers: data.activeUsers,
           tcpOverhead: 60,
-          wsOverhead: 8,
-          loss: 0,
+          wsOverhead: 9,
+
+          loss: data.video.loss || 0,
         };
+
         const newHistory = [...prev, newPoint];
         if (newHistory.length > 20) newHistory.shift();
         return newHistory;
@@ -195,6 +197,27 @@ const App: React.FC = () => {
 
     socket.on("user_joined_room", (d: any) => {
       addLog("WS", "JOIN_ROOM", 101, `User joined room`);
+    });
+
+    // === LISTENERS: FRIENDSHIPS ===
+    socket.on("friend_request", (newFriendship: any) => {
+      setFriendships((prev) => [...prev, newFriendship]);
+      addLog("WS", "FRIEND_REQ", 200, `Request from ${newFriendship.senderId}`);
+    });
+
+    socket.on("friend_accepted", ({ senderId, receiverId }: any) => {
+      setFriendships((prev) =>
+        prev.map((f) => {
+          if (
+            (f.senderId === senderId && f.receiverId === receiverId) ||
+            (f.senderId === receiverId && f.receiverId === senderId)
+          ) {
+            return { ...f, status: "accepted" };
+          }
+          return f;
+        }),
+      );
+      addLog("WS", "FRIEND_ACC", 200, `Friend accepted`);
     });
 
     return () => {
@@ -248,8 +271,6 @@ const App: React.FC = () => {
     targetUserId: string,
     action: "add" | "accept" | "reject",
   ) => {
-    // ... Copy logic friend action Anda yang lama ...
-    // Agar singkat saya skip detail implementasi fetch-nya, pakai yang lama saja
     if (!currentUser) return;
     try {
       await fetch(`${API_URL}/friendships/action`, {

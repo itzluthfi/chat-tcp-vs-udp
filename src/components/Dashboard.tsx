@@ -54,17 +54,17 @@ const Dashboard: React.FC<DashboardProps> = ({ metrics }) => {
             System Performance
           </h2>
           <p className="text-slate-400 font-medium text-sm md:text-base">
-            Real-time metrics from Central Cluster #01-SEA
+            Real-time Testing
           </p>
         </div>
-        <div className="flex gap-4">
+        {/* <div className="flex gap-4">
           <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/80 rounded-xl border border-slate-700 shadow-xl backdrop-blur-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span className="text-xs font-black text-slate-300 uppercase tracking-widest">
               Core Engine Active
             </span>
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* Key Metrics Grid */}
@@ -72,7 +72,6 @@ const Dashboard: React.FC<DashboardProps> = ({ metrics }) => {
         {[
           {
             label: "Network Latency",
-            // SAFEGUARD: Pastikan toFixed dipanggil pada number
             value: `${(currentMetric.latency || 0).toFixed(1)}ms`,
             icon: "fa-bolt",
             color: "text-indigo-400",
@@ -93,13 +92,13 @@ const Dashboard: React.FC<DashboardProps> = ({ metrics }) => {
             color: "text-emerald-400",
             bg: "bg-emerald-500/10",
           },
-          {
-            label: "Packet Integrity",
-            value: "99.98%",
-            icon: "fa-shield-halved",
-            color: "text-rose-400",
-            bg: "bg-rose-500/10",
-          },
+          // {
+          //   label: "Packet Integrity",
+          //   value: "99.98%",
+          //   icon: "fa-shield-halved",
+          //   color: "text-rose-400",
+          //   bg: "bg-rose-500/10",
+          // },
         ].map((stat, i) => (
           <div
             key={i}
